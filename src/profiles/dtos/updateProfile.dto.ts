@@ -1,15 +1,18 @@
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Gender } from '../../common/enums/gender.enum';
 
-export class CreateProfileDto {
+export class UpdateProfileDto {
+  @IsOptional()
   @IsNumber()
-  height: number;
+  height?: number;
 
+  @IsOptional()
   @IsNumber()
-  weight: number;
+  weight?: number;
 
+  @IsOptional()
   @IsEnum(Gender)
-  gender: Gender;
+  gender?: Gender;
 
   @IsOptional()
   @IsString({ each: true })
