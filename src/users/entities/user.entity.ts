@@ -1,25 +1,24 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+  OneToMany,
+} from 'typeorm';
 import { Profile } from '../../profiles/entities/profile.entity';
 import { Call } from '../../calls/entities/call.entity';
 import { Contact } from '../../contacts/entities/contact.entity';
 import { Role } from '../../common/enums/role.enum';
+import { StateArchive } from '../../state-archive/entities/state-archive.entity';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
-  egn: string; 
-
-  @Column()
-  fullName: string;
-
-  @Column()
-  phoneNumber: string;
-
-  @Column()
-  email: string;
+  // @Column()
+  // fullName: string;
 
   @Column({ type: 'enum', enum: Role, default: Role.USER })
   role: Role;
@@ -36,4 +35,8 @@ export class User {
 
   @OneToMany(() => Contact, (contact) => contact.user, { cascade: true })
   contacts: Contact[];
+
+  @OneToOne(() => StateArchive, (archive) => archive.user, { cascade: true })
+  @JoinColumn()
+  stateArchive: StateArchive;
 }
