@@ -25,7 +25,6 @@ export class MailService {
         pass: this.configService.get<string>('MAIL_PASSWORD'),
       },
       tls: {
-        // Don't fail on invalid certs (for development only)
         rejectUnauthorized: this.configService.get<string>('NODE_ENV') === 'production',
       },
       logger: true,
