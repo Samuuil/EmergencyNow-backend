@@ -6,6 +6,10 @@ export class CreateStateArchiveDto {
   @Length(10, 10, { message: 'EGN must be exactly 10 characters long' })
   egn: string;
 
+  @IsString()
+  @IsNotEmpty()
+  fullName: string;
+
   @IsEmail({}, { message: 'Email must be a valid email address' })
   email: string;
 

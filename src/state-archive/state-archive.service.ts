@@ -37,4 +37,8 @@ export class StateArchiveService {
     const archive = await this.findOne(id);
     await this.archiveRepo.remove(archive);
   }
+
+  async findByEgn(egn: string): Promise<StateArchive | null> {
+    return this.archiveRepo.findOne({ where: { egn } });
+  }
 }

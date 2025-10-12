@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/createUser.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class UsersService {
@@ -40,5 +41,26 @@ export class UsersService {
 
   async remove(id: string): Promise<void> {
     await this.usersRepository.delete(id);
+  }
+
+  async findByStateArchiveId(stateArchiveId: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { stateArchive: { id: stateArchiveId } },
+      relations: ['stateArchive', 'profile'],
+    });
+  }
+
+  async updateRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
+    await this.usersRepository.update(userId, { 
+      refreshToken: refreshToken ?? undefined 
+    });
+  }
+
+  async createWithExistingStateArchive(stateArchiveId: string, role?: Role): Promise<User> {
+    const user = this.usersRepository.create({
+      role: role || Role.USER,
+      stateArchive: { id: stateArchiveId } as any,
+    });
+    return this.usersRepository.save(user);
   }
 }
