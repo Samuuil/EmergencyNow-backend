@@ -7,7 +7,13 @@ export class Contact {
   id: string;
 
   @Column()
+  name: string;
+
+  @Column()
   phoneNumber: string;
+
+  @Column({ nullable: true })
+  email?: string;
 
   @ManyToOne(() => User, (user) => user.contacts, { onDelete: 'CASCADE' })
   user: User;
