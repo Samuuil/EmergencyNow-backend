@@ -3,6 +3,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module';
+import { AmbulancesModule } from './ambulances/ambulance.module';
+import { CallsModule } from './calls/call.module';
+import { ProfilesModule } from './profiles/profile.module';
+import { UsersModule } from './users/user.module';
+import { StateArchiveModule } from './state-archive/state-archive.module';
+import { ContactsModule } from './contacts/contact.module';
 
 
 @Module({
@@ -22,6 +29,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         synchronize: true,
       }),
     }),
+    AuthModule,
+    AmbulancesModule,
+    CallsModule,
+    ProfilesModule,
+    UsersModule,
+    StateArchiveModule,
+    ContactsModule
   ],
   controllers: [AppController],
   providers: [AppService],
