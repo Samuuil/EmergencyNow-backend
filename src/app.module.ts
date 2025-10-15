@@ -10,6 +10,7 @@ import { ProfilesModule } from './profiles/profile.module';
 import { UsersModule } from './users/user.module';
 import { StateArchiveModule } from './state-archive/state-archive.module';
 import { ContactsModule } from './contacts/contact.module';
+import { HospitalsModule } from './hospitals/hospitals.module';
 
 
 @Module({
@@ -35,7 +36,8 @@ import { ContactsModule } from './contacts/contact.module';
     ProfilesModule,
     UsersModule,
     StateArchiveModule,
-    ContactsModule
+    ContactsModule,
+    HospitalsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
