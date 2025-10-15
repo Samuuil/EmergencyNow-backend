@@ -38,33 +38,76 @@ export class GoogleMapsService {
 
   async getRoute(origin: Location, destination: Location): Promise<RouteInfo> {
     try {
-      const response = await this.client.directions({
-        params: {
-          origin: `${origin.latitude},${origin.longitude}`,
-          destination: `${destination.latitude},${destination.longitude}`,
-          mode: TravelMode.driving,
-          key: this.apiKey,
+      const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+      const requestBody = {
+        origin: {
+          location: {
+            latLng: {
+              latitude: origin.latitude,
+              longitude: origin.longitude,
+            },
+          },
         },
+        destination: {
+          location: {
+            latLng: {
+              latitude: destination.latitude,
+              longitude: destination.longitude,
+            },
+          },
+        },
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
+        computeAlternativeRoutes: false,
+        routeModifiers: {
+          avoidTolls: false,
+          avoidHighways: false,
+          avoidFerries: false,
+        },
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
+        },
+        body: JSON.stringify(requestBody),
       });
 
-      if (response.data.status !== 'OK' || !response.data.routes.length) {
-        throw new Error(`No route found: ${response.data.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const route = response.data.routes[0];
-      const leg = route.legs[0];
+      const data = await response.json();
+
+      if (!data.routes || data.routes.length === 0) {
+        throw new Error('No route found');
+      }
+
+      const route = data.routes[0];
+      const leg = route.legs?.[0];
 
       return {
-        distance: leg.distance.value,
-        duration: leg.duration.value,
-        polyline: route.overview_polyline.points,
-        steps: leg.steps.map((step) => ({
-          distance: step.distance.value,
-          duration: step.duration.value,
-          instruction: step.html_instructions,
-          startLocation: step.start_location,
-          endLocation: step.end_location,
-        })),
+        distance: route.distanceMeters || 0,
+        duration: parseInt(route.duration?.replace('s', '') || '0'),
+        polyline: route.polyline?.encodedPolyline || '',
+        steps: leg?.steps?.map((step: any) => ({
+          distance: step.distanceMeters || 0,
+          duration: parseInt(step.staticDuration?.replace('s', '') || '0'),
+          instruction: step.navigationInstruction?.instructions || '',
+          startLocation: {
+            lat: step.startLocation?.latLng?.latitude || 0,
+            lng: step.startLocation?.latLng?.longitude || 0,
+          },
+          endLocation: {
+            lat: step.endLocation?.latLng?.latitude || 0,
+            lng: step.endLocation?.latLng?.longitude || 0,
+          },
+        })) || [],
       };
     } catch (error) {
       this.logger.error(`Error calculating route: ${error.message}`, error.stack);
@@ -77,28 +120,67 @@ export class GoogleMapsService {
     destination: Location,
   ): Promise<DistanceMatrixResult> {
     try {
-      const response = await this.client.distancematrix({
-        params: {
-          origins: [`${origin.latitude},${origin.longitude}`],
-          destinations: [`${destination.latitude},${destination.longitude}`],
-          mode: TravelMode.driving,
-          key: this.apiKey,
+      const url = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
+
+      const requestBody = {
+        origins: [
+          {
+            waypoint: {
+              location: {
+                latLng: {
+                  latitude: origin.latitude,
+                  longitude: origin.longitude,
+                },
+              },
+            },
+          },
+        ],
+        destinations: [
+          {
+            waypoint: {
+              location: {
+                latLng: {
+                  latitude: destination.latitude,
+                  longitude: destination.longitude,
+                },
+              },
+            },
+          },
+        ],
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': 'originIndex,destinationIndex,duration,distanceMeters,status',
         },
+        body: JSON.stringify(requestBody),
       });
 
-      if (response.data.status !== 'OK') {
-        throw new Error(`Distance matrix error: ${response.data.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const element = response.data.rows[0].elements[0];
+      const data = await response.json();
+
+      if (!data || data.length === 0) {
+        throw new Error('No distance data returned');
+      }
+
+      const element = data[0];
 
       if (element.status !== 'OK') {
         throw new Error(`No route available: ${element.status}`);
       }
 
       return {
-        distance: element.distance.value,
-        duration: element.duration.value,
+        distance: element.distanceMeters || 0,
+        duration: parseInt(element.duration?.replace('s', '') || '0'),
       };
     } catch (error) {
       this.logger.error(`Error calculating distance: ${error.message}`, error.stack);
@@ -111,30 +193,63 @@ export class GoogleMapsService {
     destinations: Location[],
   ): Promise<DistanceMatrixResult[]> {
     try {
-      const destinationStrings = destinations.map(
-        (dest) => `${dest.latitude},${dest.longitude}`,
-      );
+      const url = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
 
-      const response = await this.client.distancematrix({
-        params: {
-          origins: [`${origin.latitude},${origin.longitude}`],
-          destinations: destinationStrings,
-          mode: TravelMode.driving,
-          key: this.apiKey,
+      const requestBody = {
+        origins: [
+          {
+            waypoint: {
+              location: {
+                latLng: {
+                  latitude: origin.latitude,
+                  longitude: origin.longitude,
+                },
+              },
+            },
+          },
+        ],
+        destinations: destinations.map((dest) => ({
+          waypoint: {
+            location: {
+              latLng: {
+                latitude: dest.latitude,
+                longitude: dest.longitude,
+              },
+            },
+          },
+        })),
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': 'originIndex,destinationIndex,duration,distanceMeters,status',
         },
+        body: JSON.stringify(requestBody),
       });
 
-      if (response.data.status !== 'OK') {
-        throw new Error(`Distance matrix error: ${response.data.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      return response.data.rows[0].elements.map((element) => {
+      const data = await response.json();
+
+      if (!data || data.length === 0) {
+        return destinations.map(() => ({ distance: Infinity, duration: Infinity }));
+      }
+
+      return data.map((element: any) => {
         if (element.status !== 'OK') {
           return { distance: Infinity, duration: Infinity };
         }
         return {
-          distance: element.distance.value,
-          duration: element.duration.value,
+          distance: element.distanceMeters || 0,
+          duration: parseInt(element.duration?.replace('s', '') || '0'),
         };
       });
     } catch (error) {

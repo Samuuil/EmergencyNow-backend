@@ -1,17 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { CallsService } from './call.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
 import { Call } from './entities/call.entity';
 import { User } from 'src/users/entities/user.entity';
 import { CallStatus } from '../common/enums/call-status.enum';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('calls')
+@UseGuards(JwtAuthGuard)
 export class CallsController {
   constructor(private readonly callsService: CallsService) {}
 
   @Post()
-  create(@Body() dto: CreateCallDto, user: User): Promise<Call> {
+  create(@Body() dto: CreateCallDto, @CurrentUser() user: User): Promise<Call> {
     return this.callsService.create(dto, user);
   }
 
