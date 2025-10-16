@@ -85,9 +85,9 @@ export class HospitalsService {
       .slice(0, limit);
   }
 
-  async syncHospitalsFromGooglePlaces(location: Location, radius: number = 10000): Promise<void> {
+  async syncHospitalsFromGooglePlaces(location: Location, radius: number = 20000): Promise<void> {
     const places = await this.googleMapsService.findHospitalsByTextSearch(location, radius);
-  
+    console.log(places);
     for (const place of places) {
       const existing = await this.hospitalRepository.findOne({
         where: { placeId: place.placeId },
