@@ -19,58 +19,26 @@ import {
   
   @Controller('contacts')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
   export class ContactsController {
     constructor(private readonly contactsService: ContactsService) {}
-  
-    @Post()
-    async create(@Body() dto: CreateContactDto) {
-      return this.contactsService.create(dto);
-    }
-  
-    @Get()
-    async findAll() {
-      return this.contactsService.findAll();
-    }
-  
-    @Get(':id')
-    async findOne(@Param('id') id: string) {
-      return this.contactsService.findOne(id);
-    }
-  
-    @Patch(':id')
-    async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
-      return this.contactsService.update(id, dto);
-    }
-  
-    @Delete(':id')
-    async remove(@Param('id') id: string) {
-      await this.contactsService.remove(id);
-      return { message: `Contact ${id} deleted successfully.` };
-    }
-  }
-  
-  @Controller('contacts/me')
-  @UseGuards(JwtAuthGuard)
-  export class UserContactsController {
-    constructor(private readonly contactsService: ContactsService) {}
-  
-    @Get()
+
+    // User routes: authenticated users can manage their own contacts
+    @Get('me')
     async getMyContacts(@CurrentUser() user: any) {
       return this.contactsService.getUserContacts(user.id);
     }
-  
-    @Post()
+
+    @Post('me')
     async createMyContact(@CurrentUser() user: any, @Body() dto: CreateContactDto) {
       return this.contactsService.createContactForUser(user.id, dto);
     }
-  
-    @Get(':id')
+
+    @Get('me/:id')
     async getMyContact(@CurrentUser() user: any, @Param('id') id: string) {
       return this.contactsService.getUserContact(user.id, id);
     }
-  
-    @Patch(':id')
+
+    @Patch('me/:id')
     async updateMyContact(
       @CurrentUser() user: any,
       @Param('id') id: string,
@@ -78,10 +46,42 @@ import {
     ) {
       return this.contactsService.updateUserContact(user.id, id, dto);
     }
-  
-    @Delete(':id')
+
+    @Delete('me/:id')
     async removeMyContact(@CurrentUser() user: any, @Param('id') id: string) {
       await this.contactsService.removeUserContact(user.id, id);
       return { message: 'Contact deleted successfully' };
+    }
+
+    // Admin routes: require ADMIN role
+    @Post()
+    @Roles(Role.ADMIN)
+    async create(@Body() dto: CreateContactDto) {
+      return this.contactsService.create(dto);
+    }
+
+    @Get()
+    @Roles(Role.ADMIN)
+    async findAll() {
+      return this.contactsService.findAll();
+    }
+
+    @Get(':id')
+    @Roles(Role.ADMIN)
+    async findOne(@Param('id') id: string) {
+      return this.contactsService.findOne(id);
+    }
+
+    @Patch(':id')
+    @Roles(Role.ADMIN)
+    async update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
+      return this.contactsService.update(id, dto);
+    }
+
+    @Delete(':id')
+    @Roles(Role.ADMIN)
+    async remove(@Param('id') id: string) {
+      await this.contactsService.remove(id);
+      return { message: `Contact ${id} deleted successfully.` };
     }
   }

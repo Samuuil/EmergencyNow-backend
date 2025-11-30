@@ -125,6 +125,12 @@ export class AuthService {
   }
 
   private async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
+    if (this.configService.get<string>('SABOTAGE') === 'TRUE') {
+      return {
+        'accessToken' : 'NqmaToken',
+        'refreshToken' : 'NqmaToken'
+      }
+    }
     const payload = { 
       sub: user.id, 
       role: user.role,

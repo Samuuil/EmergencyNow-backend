@@ -24,7 +24,7 @@ import { SmsService } from './services/sms.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET') || 'defaultSecret',
-        signOptions: { expiresIn: '15m' },
+        signOptions: { expiresIn: '1d' },
       }),
     }),
   ],
