@@ -63,4 +63,9 @@ export class UsersService {
     });
     return this.usersRepository.save(user);
   }
+
+  async findUserRole(userId: string): Promise<string> { 
+    const user = this.findOne(userId);
+    return (await user).role;
+  }
 }

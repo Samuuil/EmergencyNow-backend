@@ -18,7 +18,7 @@ import {
   import { User } from './entities/user.entity';
   
   @Controller('users')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  // @UseGuards(JwtAuthGuard, RolesGuard)
   export class UsersController {
     constructor(private readonly usersService: UsersService) {}
   
@@ -55,5 +55,11 @@ import {
       await this.usersService.remove(id);
       return { message: 'User deleted successfully' };
     }
+
+    @Get('user-role/:id')
+    async findRole(@Param('id') id: string): Promise<String> {
+      return await this.usersService.findUserRole(id);
+    }
+
   }
   
