@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Call } from './entities/call.entity';
@@ -9,6 +9,7 @@ import { Ambulance } from '../ambulances/entities/ambulance.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CallStatus } from '../common/enums/call-status.enum';
+import { DriverGateway } from '../realtime/driver.gateway';
 
 @Injectable()
 export class CallsService {
@@ -21,6 +22,8 @@ export class CallsService {
     private readonly ambulanceRepository: Repository<Ambulance>,
     private readonly ambulancesService: AmbulancesService,
     private readonly googleMapsService: GoogleMapsService,
+    @Inject(forwardRef(() => DriverGateway))
+    private readonly driverGateway: DriverGateway,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -37,54 +40,123 @@ export class CallsService {
     const savedCall = await this.callsRepository.save(call);
 
     try {
-      await this.dispatchNearestAmbulance(savedCall.id);
+      await this.proposeToNearestDriver(savedCall.id);
     } catch (error) {
-      console.error('Failed to dispatch ambulance:', error);
+      console.error('Failed to propose call to driver:', error);
     }
 
     return this.findOne(savedCall.id);
   }
 
   async dispatchNearestAmbulance(callId: string): Promise<Call> {
+    // For backward compatibility with the controller route: trigger offer flow
     const call = await this.findOne(callId);
-
-    if (call.status !== CallStatus.PENDING) {
-      throw new BadRequestException('Call has already been dispatched or completed');
+    if (call.status === CallStatus.COMPLETED || call.status === CallStatus.CANCELLED) {
+      throw new BadRequestException('Call is already completed or cancelled');
     }
+    await this.proposeToNearestDriver(callId);
+    return call;
+  }
 
-    const nearestAmbulance = await this.ambulancesService.findNearestAvailableAmbulance({
-      latitude: call.latitude,
-      longitude: call.longitude,
-    });
+  private async proposeToNearestDriver(callId: string): Promise<void> {
+    const call = await this.findOne(callId);
+    if (call.status !== CallStatus.PENDING) return;
 
-    if (!nearestAmbulance) {
-      throw new NotFoundException('No available ambulances found');
-    }
+    // Exclude already rejected ambulances
+    const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
 
-    const route = await this.googleMapsService.getRoute(
-      {
-        latitude: nearestAmbulance.latitude,
-        longitude: nearestAmbulance.longitude,
-      },
-      {
-        latitude: call.latitude,
-        longitude: call.longitude,
-      },
+    // Find nearest available ambulance not yet rejected and with an assigned driver
+    let candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
+      { latitude: call.latitude, longitude: call.longitude },
+      excluded,
     );
 
-    call.ambulance = nearestAmbulance;
+    while (
+      candidate && (
+        !candidate.driverId || !this.driverGateway.isDriverOnline(candidate.driverId)
+      )
+    ) {
+      // no driver assigned or driver offline, skip this ambulance
+      excluded.push(candidate.id);
+      candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
+        { latitude: call.latitude, longitude: call.longitude },
+        excluded,
+      );
+    }
+
+    if (!candidate) {
+      // No available ambulances/drivers, keep call pending
+      return;
+    }
+
+    this.driverGateway.setPendingAmbulance(callId, candidate.id);
+
+    // Send lightweight offer with distance/duration
+    const { distance, duration } = await this.googleMapsService.getDistanceAndDuration(
+      { latitude: candidate.latitude!, longitude: candidate.longitude! },
+      { latitude: call.latitude, longitude: call.longitude },
+    );
+
+    this.driverGateway.offerCall({
+      callId: call.id,
+      description: call.description,
+      latitude: call.latitude,
+      longitude: call.longitude,
+      ambulanceId: candidate.id,
+      driverId: candidate.driverId!,
+      distance,
+      duration,
+    });
+  }
+
+  async handleDriverResponse(callId: string, driverId: string, accept: boolean): Promise<void> {
+    const call = await this.findOne(callId);
+
+    // Validate driver corresponds to pending ambulance
+    const ambulance = await this.ambulancesService.findByDriver(driverId);
+    if (!ambulance) return; // driver has no ambulance
+
+    const pendingAmbulanceId = this.driverGateway.getPendingAmbulanceId(callId);
+    if (!pendingAmbulanceId || pendingAmbulanceId !== ambulance.id) {
+      return; // stale/invalid response
+    }
+
+    if (!accept) {
+      // mark rejection and try next candidate
+      this.driverGateway.addRejection(callId, ambulance.id);
+      await this.proposeToNearestDriver(callId);
+      return;
+    }
+
+    // Accept: assign ambulance, compute route, update status, notify driver
+    const route = await this.googleMapsService.getRoute(
+      { latitude: ambulance.latitude!, longitude: ambulance.longitude! },
+      { latitude: call.latitude, longitude: call.longitude },
+    );
+
+    call.ambulance = ambulance;
     call.status = CallStatus.DISPATCHED;
     call.routePolyline = route.polyline;
     call.estimatedDistance = route.distance;
     call.estimatedDuration = route.duration;
     call.routeSteps = route.steps;
-    call.ambulanceCurrentLatitude = nearestAmbulance.latitude;
-    call.ambulanceCurrentLongitude = nearestAmbulance.longitude;
+    call.ambulanceCurrentLatitude = ambulance.latitude!;
+    call.ambulanceCurrentLongitude = ambulance.longitude!;
     call.dispatchedAt = new Date();
 
-    await this.ambulancesService.markAsDispatched(nearestAmbulance.id);
+    await this.ambulancesService.markAsDispatched(ambulance.id);
+    await this.callsRepository.save(call);
 
-    return this.callsRepository.save(call);
+    this.driverGateway.clearOffer(callId);
+    this.driverGateway.sendRouteToDriver(driverId, {
+      callId: call.id,
+      route: {
+        polyline: call.routePolyline!,
+        distance: call.estimatedDistance!,
+        duration: call.estimatedDuration!,
+        steps: call.routeSteps || [],
+      },
+    });
   }
 
   async updateAmbulanceLocation(
