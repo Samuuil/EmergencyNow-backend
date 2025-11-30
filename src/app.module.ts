@@ -11,6 +11,7 @@ import { UsersModule } from './users/user.module';
 import { StateArchiveModule } from './state-archive/state-archive.module';
 import { ContactsModule } from './contacts/contact.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 
 @Module({
@@ -38,6 +39,7 @@ import { HospitalsModule } from './hospitals/hospitals.module';
     StateArchiveModule,
     ContactsModule,
     HospitalsModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
