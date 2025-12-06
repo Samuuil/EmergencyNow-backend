@@ -11,6 +11,7 @@ import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { CallsService } from '../calls/call.service';
+import { AmbulancesService } from '../ambulances/ambulance.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
@@ -30,9 +31,22 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // callId -> { ambulanceId, rejectedAmbulanceIds }
   private callOffers = new Map<string, { ambulanceId: string; rejectedAmbulanceIds: Set<string> }>();
 
+  // For on-demand location collection
+  private locationRequestId = 0;
+  private pendingLocationRequests = new Map<
+    number,
+    {
+      driverIdToAmbulanceId: Map<string, string>;
+      collected: Array<{ ambulanceId: string; latitude: number; longitude: number }>;
+      resolve: (value: Array<{ ambulanceId: string; latitude: number; longitude: number }>) => void;
+    }
+  >();
+
   constructor(
     @Inject(forwardRef(() => CallsService))
     private readonly callsService: CallsService,
+    @Inject(forwardRef(() => AmbulancesService))
+    private readonly ambulancesService: AmbulancesService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
@@ -95,7 +109,39 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.callsService.handleDriverResponse(data.callId, driverId, data.accept);
   }
 
-  // Driver sends location updates
+  // Driver responds to location request (on-demand refresh)
+  @SubscribeMessage('location.response')
+  async onLocationResponse(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: { requestId: number; latitude: number; longitude: number },
+  ) {
+    const driverId = this.socketDrivers.get(client.id);
+    if (!driverId) return;
+
+    const pending = this.pendingLocationRequests.get(data.requestId);
+    if (!pending) return; // expired or unknown request
+
+    const ambulanceId = pending.driverIdToAmbulanceId.get(driverId);
+    if (!ambulanceId) return; // driver not part of this request
+
+    // Avoid duplicates
+    if (!pending.collected.some((c) => c.ambulanceId === ambulanceId)) {
+      pending.collected.push({
+        ambulanceId,
+        latitude: data.latitude,
+        longitude: data.longitude,
+      });
+
+      await this.ambulancesService.updateLocation(
+        ambulanceId,
+        data.latitude,
+        data.longitude,
+      );
+    }
+  }
+
+  // Driver sends location updates (during active call)
   @SubscribeMessage('location.update')
   async onLocationUpdate(
     @ConnectedSocket() client: Socket,
@@ -195,5 +241,58 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   isDriverOnline(driverId: string): boolean {
     return this.driverSockets.has(driverId);
+  }
+
+  /**
+   * Request fresh locations from all online drivers whose ambulances are available.
+   * Waits up to `timeoutMs` for responses, then updates the database.
+   */
+  async refreshAvailableAmbulanceLocations(timeoutMs = 5000): Promise<void> {
+    const driverIdToAmbulanceId = await this.ambulancesService.getDriverIdToAmbulanceIdMap();
+
+    // Filter to only drivers that are currently online
+    const onlineDriverIds = Array.from(driverIdToAmbulanceId.keys()).filter((dId: string) =>
+      this.driverSockets.has(dId),
+    );
+
+    if (onlineDriverIds.length === 0) {
+      this.logger.log('No online drivers with available ambulances to request location from');
+      return;
+    }
+
+    const requestId = ++this.locationRequestId;
+
+    // Create a promise that resolves when timeout or all responses collected
+    const collectedLocations = await new Promise<
+      Array<{ ambulanceId: string; latitude: number; longitude: number }>
+    >((resolve) => {
+      const pendingEntry = {
+        driverIdToAmbulanceId,
+        collected: [] as Array<{ ambulanceId: string; latitude: number; longitude: number }>,
+        resolve,
+      };
+      this.pendingLocationRequests.set(requestId, pendingEntry);
+
+      // Emit location.request to each online driver
+      for (const driverId of onlineDriverIds) {
+        this.emitToDriver(driverId as string, 'location.request', { requestId });
+      }
+
+      // Resolve after timeout (or we could resolve early if all respond, but timeout is simpler)
+      setTimeout(() => {
+        const entry = this.pendingLocationRequests.get(requestId);
+        this.pendingLocationRequests.delete(requestId);
+        resolve(entry?.collected ?? []);
+      }, timeoutMs);
+    });
+
+    if (collectedLocations.length > 0) {
+      this.logger.log(
+        `Collected ${collectedLocations.length} location(s) from drivers; updating DB`,
+      );
+      await this.ambulancesService.bulkUpdateLocations(collectedLocations);
+    } else {
+      this.logger.warn('No location responses received from drivers');
+    }
   }
 }

@@ -58,9 +58,20 @@ export class CallsService {
     return call;
   }
 
-  private async proposeToNearestDriver(callId: string): Promise<void> {
+  private async proposeToNearestDriver(callId: string, skipLocationRefresh = false): Promise<void> {
     const call = await this.findOne(callId);
     if (call.status !== CallStatus.PENDING) return;
+
+    // Refresh locations from all available drivers before selecting the nearest
+    // Skip refresh if this is a retry after rejection (locations were just fetched)
+    if (!skipLocationRefresh) {
+      try {
+        await this.driverGateway.refreshAvailableAmbulanceLocations(5000);
+      } catch (error) {
+        console.error('Failed to refresh ambulance locations:', error);
+        // Continue with potentially stale locations rather than failing the call
+      }
+    }
 
     // Exclude already rejected ambulances
     const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
@@ -91,11 +102,23 @@ export class CallsService {
 
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
 
-    // Send lightweight offer with distance/duration
-    const { distance, duration } = await this.googleMapsService.getDistanceAndDuration(
-      { latitude: candidate.latitude!, longitude: candidate.longitude! },
-      { latitude: call.latitude, longitude: call.longitude },
-    );
+    // Send lightweight offer with distance/duration.
+    // IMPORTANT: If Google routing fails (e.g. "No route available"), we must still
+    // send the offer so the driver sees the popup. In that case we fall back to
+    // distance/duration = 0.
+    let distance = 0;
+    let duration = 0;
+    try {
+      const res = await this.googleMapsService.getDistanceAndDuration(
+        { latitude: candidate.latitude!, longitude: candidate.longitude! },
+        { latitude: call.latitude, longitude: call.longitude },
+      );
+      distance = res.distance;
+      duration = res.duration;
+    } catch (error) {
+      // Keep logging for debugging but do NOT stop the offer flow
+      console.error('getDistanceAndDuration failed, sending offer without ETA:', error);
+    }
 
     this.driverGateway.offerCall({
       callId: call.id,
@@ -123,8 +146,9 @@ export class CallsService {
 
     if (!accept) {
       // mark rejection and try next candidate
+      // Skip location refresh since we just did one for this call
       this.driverGateway.addRejection(callId, ambulance.id);
-      await this.proposeToNearestDriver(callId);
+      await this.proposeToNearestDriver(callId, true);
       return;
     }
 

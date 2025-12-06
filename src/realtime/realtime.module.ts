@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { DriverGateway } from './driver.gateway';
 import { CallsModule } from '../calls/call.module';
+import { AmbulancesModule } from '../ambulances/ambulance.module';
 import { AuthModule } from '../auth/auth.module';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { JwtModule } from '@nestjs/jwt';
@@ -10,6 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   imports: [
     ConfigModule,
     forwardRef(() => CallsModule),
+    forwardRef(() => AmbulancesModule),
     AuthModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

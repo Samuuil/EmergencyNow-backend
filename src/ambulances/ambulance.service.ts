@@ -104,6 +104,28 @@ export class AmbulancesService {
     });
   }
 
+  async findAvailableWithDriver(): Promise<Ambulance[]> {
+    return this.ambulanceRepository
+      .createQueryBuilder('ambulance')
+      .where('ambulance.available = :available', { available: true })
+      .andWhere('ambulance.driverId IS NOT NULL')
+      .getMany();
+  }
+
+  async bulkUpdateLocations(
+    updates: Array<{ ambulanceId: string; latitude: number; longitude: number }>,
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    await Promise.all(
+      updates.map((u) =>
+        this.ambulanceRepository.update(u.ambulanceId, {
+          latitude: u.latitude,
+          longitude: u.longitude,
+        }),
+      ),
+    );
+  }
+
   async findNearestAvailableAmbulance(
     location: Location,
   ): Promise<AmbulanceWithDistance | null> {
@@ -244,5 +266,16 @@ export class AmbulancesService {
     return await this.ambulanceRepository.findOne({
       where: { driverId },
     });
+  }
+
+  async getDriverIdToAmbulanceIdMap(): Promise<Map<string, string>> {
+    const ambulances = await this.findAvailableWithDriver();
+    const map = new Map<string, string>();
+    for (const amb of ambulances) {
+      if (amb.driverId) {
+        map.set(amb.driverId, amb.id);
+      }
+    }
+    return map;
   }
 }
