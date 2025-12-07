@@ -67,4 +67,29 @@ export class Call {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
+
+  // Hospital selection (after driver arrives at patient location)
+  @Column({ nullable: true })
+  selectedHospitalId: string;
+
+  @Column({ nullable: true })
+  selectedHospitalName: string;
+
+  @Column('text', { nullable: true })
+  hospitalRoutePolyline: string;
+
+  @Column({ type: 'int', nullable: true })
+  hospitalRouteDistance: number;
+
+  @Column({ type: 'int', nullable: true })
+  hospitalRouteDuration: number;
+
+  @Column({ type: 'json', nullable: true })
+  hospitalRouteSteps: Array<{
+    distance: number;
+    duration: number;
+    instruction: string;
+    startLocation: { lat: number; lng: number };
+    endLocation: { lat: number; lng: number };
+  }>;
 }

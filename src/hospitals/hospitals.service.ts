@@ -68,19 +68,27 @@ export class HospitalsService {
       longitude: h.longitude,
     }));
 
-    const distances = await this.googleMapsService.getDistancesToMultipleDestinations(
-      location,
-      hospitalLocations,
-    );
+    let distances: { distance: number; duration: number }[] = [];
+
+    try {
+      distances = await this.googleMapsService.getDistancesToMultipleDestinations(
+        location,
+        hospitalLocations,
+      );
+    } catch (error) {
+      // If Google distance matrix fails, fall back to returning hospitals
+      // without dropping them. Distances will remain Infinity and will be
+      // sorted to the end of the list.
+      distances = hospitalLocations.map(() => ({ distance: Infinity, duration: Infinity }));
+    }
 
     const hospitalsWithDistances: HospitalWithDistance[] = hospitals.map((hospital, index) => ({
       ...hospital,
-      distance: distances[index].distance,
-      duration: distances[index].duration,
+      distance: distances[index]?.distance ?? Infinity,
+      duration: distances[index]?.duration ?? Infinity,
     }));
 
     return hospitalsWithDistances
-      .filter((h) => h.distance !== Infinity)
       .sort((a, b) => a.distance - b.distance)
       .slice(0, limit);
   }

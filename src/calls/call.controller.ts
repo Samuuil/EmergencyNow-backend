@@ -33,6 +33,32 @@ export class CallsController {
     return this.callsService.getTrackingData(id);
   }
 
+  @Post(':id/hospitals')
+  getHospitalsForCall(
+    @Param('id') id: string,
+    @Body() body: { latitude: number; longitude: number },
+  ) {
+    return this.callsService.getHospitalsForCall(id, body.latitude, body.longitude);
+  }
+
+  @Post(':id/select-hospital')
+  selectHospital(
+    @Param('id') id: string,
+    @Body() body: { hospitalId: string; latitude: number; longitude: number },
+  ) {
+    return this.callsService.selectHospitalForCall(
+      id,
+      body.hospitalId,
+      body.latitude,
+      body.longitude,
+    );
+  }
+
+  @Get(':id/hospital-route')
+  getHospitalRoute(@Param('id') id: string) {
+    return this.callsService.getHospitalRouteData(id);
+  }
+
   @Post(':id/dispatch')
   dispatchAmbulance(@Param('id') id: string): Promise<Call> {
     return this.callsService.dispatchNearestAmbulance(id);
