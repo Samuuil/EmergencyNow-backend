@@ -10,6 +10,7 @@ import { AmbulancesService } from '../ambulances/ambulance.service';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { DriverGateway } from '../realtime/driver.gateway';
+import { UserGateway } from '../realtime/user.gateway';
 
 @Injectable()
 export class CallsService {
@@ -24,6 +25,8 @@ export class CallsService {
     private readonly googleMapsService: GoogleMapsService,
     @Inject(forwardRef(() => DriverGateway))
     private readonly driverGateway: DriverGateway,
+    @Inject(forwardRef(() => UserGateway))
+    private readonly userGateway: UserGateway,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -181,6 +184,24 @@ export class CallsService {
         steps: call.routeSteps || [],
       },
     });
+
+    // Notify user that ambulance has been dispatched with route info
+    if (call.user?.id) {
+      this.userGateway.notifyCallDispatched(call.user.id, {
+        callId: call.id,
+        ambulanceId: ambulance.id,
+        ambulanceLocation: {
+          latitude: call.ambulanceCurrentLatitude!,
+          longitude: call.ambulanceCurrentLongitude!,
+        },
+        route: {
+          polyline: call.routePolyline!,
+          distance: call.estimatedDistance!,
+          duration: call.estimatedDuration!,
+          steps: call.routeSteps || [],
+        },
+      });
+    }
   }
 
   async updateAmbulanceLocation(
@@ -203,23 +224,33 @@ export class CallsService {
     call.ambulanceCurrentLatitude = latitude;
     call.ambulanceCurrentLongitude = longitude;
 
-    if (call.status === CallStatus.DISPATCHED || call.status === CallStatus.EN_ROUTE) {
-      try {
-        const updatedRoute = await this.googleMapsService.getRoute(
-          { latitude, longitude },
-          { latitude: call.latitude, longitude: call.longitude },
-        );
+    // Do not recalculate route on every location update to save Google Maps API usage.
+    // We keep using the route computed at dispatch time; only the current ambulance
+    // position is updated here.
 
-        call.routePolyline = updatedRoute.polyline;
-        call.estimatedDistance = updatedRoute.distance;
-        call.estimatedDuration = updatedRoute.duration;
-        call.routeSteps = updatedRoute.steps;
-      } catch (error) {
-        console.error('Failed to update route:', error);
-      }
+    const savedCall = await this.callsRepository.save(call);
+
+    // Notify user of ambulance location update with fresh route
+    if (call.user?.id) {
+      this.userGateway.notifyLocationUpdate(call.user.id, {
+        callId: call.id,
+        ambulanceLocation: {
+          latitude: call.ambulanceCurrentLatitude!,
+          longitude: call.ambulanceCurrentLongitude!,
+        },
+        route:
+          call.routePolyline && call.estimatedDistance && call.estimatedDuration
+            ? {
+                polyline: call.routePolyline,
+                distance: call.estimatedDistance,
+                duration: call.estimatedDuration,
+                steps: call.routeSteps || [],
+              }
+            : null,
+      });
     }
 
-    return this.callsRepository.save(call);
+    return savedCall;
   }
 
   async updateStatus(callId: string, status: CallStatus): Promise<Call> {
@@ -238,7 +269,17 @@ export class CallsService {
       call.dispatchedAt = new Date();
     }
 
-    return this.callsRepository.save(call);
+    const savedCall = await this.callsRepository.save(call);
+
+    // Notify user of status change
+    if (call.user?.id) {
+      this.userGateway.notifyStatusChange(call.user.id, {
+        callId: call.id,
+        status: call.status,
+      });
+    }
+
+    return savedCall;
   }
 
   async getTrackingData(callId: string): Promise<{
