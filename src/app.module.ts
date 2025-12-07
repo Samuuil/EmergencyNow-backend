@@ -28,7 +28,7 @@ import { RealtimeModule } from './realtime/realtime.module';
         password: config.get('DATABASE_PASSWORD'),
         database: config.get('DATABASE_NAME'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: false,
       }),
     }),
     AuthModule,

@@ -7,6 +7,7 @@ import { UpdateCallDto } from './dto/updateCall.dto';
 import { User } from '../users/entities/user.entity';
 import { Ambulance } from '../ambulances/entities/ambulance.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
+import { HospitalsService, HospitalWithDistance } from '../hospitals/hospitals.service';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { DriverGateway } from '../realtime/driver.gateway';
@@ -22,6 +23,7 @@ export class CallsService {
     @InjectRepository(Ambulance)
     private readonly ambulanceRepository: Repository<Ambulance>,
     private readonly ambulancesService: AmbulancesService,
+    private readonly hospitalsService: HospitalsService,
     private readonly googleMapsService: GoogleMapsService,
     @Inject(forwardRef(() => DriverGateway))
     private readonly driverGateway: DriverGateway,
@@ -358,5 +360,97 @@ export class CallsService {
     }
     
     await this.callsRepository.remove(call);
+  }
+
+  /**
+   * Get all hospitals sorted by distance from the driver's current location.
+   * Should be called when driver marks call as ARRIVED.
+   */
+  async getHospitalsForCall(
+    callId: string,
+    driverLatitude: number,
+    driverLongitude: number,
+  ): Promise<HospitalWithDistance[]> {
+    const call = await this.findOne(callId);
+
+    if (call.status !== CallStatus.ARRIVED) {
+      throw new BadRequestException('Hospitals can only be viewed after arriving at patient location');
+    }
+
+    return this.hospitalsService.findNearestHospitals(
+      { latitude: driverLatitude, longitude: driverLongitude },
+      50, // return up to 50 hospitals
+    );
+  }
+
+  /**
+   * Select a hospital for the call and compute route from driver's current location.
+   */
+  async selectHospitalForCall(
+    callId: string,
+    hospitalId: string,
+    driverLatitude: number,
+    driverLongitude: number,
+  ): Promise<Call> {
+    const call = await this.findOne(callId);
+
+    if (call.status !== CallStatus.ARRIVED) {
+      throw new BadRequestException('Hospital can only be selected after arriving at patient location');
+    }
+
+    const hospital = await this.hospitalsService.findOne(hospitalId);
+
+    // Compute route from driver's current location to hospital
+    const route = await this.googleMapsService.getRoute(
+      { latitude: driverLatitude, longitude: driverLongitude },
+      { latitude: hospital.latitude, longitude: hospital.longitude },
+    );
+
+    call.selectedHospitalId = hospital.id;
+    call.selectedHospitalName = hospital.name;
+    call.hospitalRoutePolyline = route.polyline;
+    call.hospitalRouteDistance = route.distance;
+    call.hospitalRouteDuration = route.duration;
+    call.hospitalRouteSteps = route.steps;
+
+    // Update ambulance current location
+    call.ambulanceCurrentLatitude = driverLatitude;
+    call.ambulanceCurrentLongitude = driverLongitude;
+
+    return this.callsRepository.save(call);
+  }
+
+  /**
+   * Get hospital route data for a call (for tracking the ambulance going to hospital).
+   */
+  async getHospitalRouteData(callId: string): Promise<{
+    hospital: { id: string; name: string } | null;
+    route: {
+      polyline: string;
+      distance: number;
+      duration: number;
+      steps: any[];
+    } | null;
+  }> {
+    const call = await this.findOne(callId);
+
+    if (!call.selectedHospitalId) {
+      return { hospital: null, route: null };
+    }
+
+    return {
+      hospital: {
+        id: call.selectedHospitalId,
+        name: call.selectedHospitalName,
+      },
+      route: call.hospitalRoutePolyline
+        ? {
+            polyline: call.hospitalRoutePolyline,
+            distance: call.hospitalRouteDistance,
+            duration: call.hospitalRouteDuration,
+            steps: call.hospitalRouteSteps || [],
+          }
+        : null,
+    };
   }
 }
