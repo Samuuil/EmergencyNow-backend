@@ -12,6 +12,8 @@ import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
+import { MailService } from '../auth/services/mail.service';
+import { ContactsService } from '../contacts/contact.service';
 
 @Injectable()
 export class CallsService {
@@ -29,6 +31,8 @@ export class CallsService {
     private readonly driverGateway: DriverGateway,
     @Inject(forwardRef(() => UserGateway))
     private readonly userGateway: UserGateway,
+    private readonly mailService: MailService,
+    private readonly contactsService: ContactsService,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -49,6 +53,11 @@ export class CallsService {
     } catch (error) {
       console.error('Failed to propose call to driver:', error);
     }
+
+    // Notify emergency contacts about the call (async, don't block)
+    this.notifyEmergencyContactsAboutCall(user, savedCall).catch((err) =>
+      console.error('Failed to notify emergency contacts:', err),
+    );
 
     return this.findOne(savedCall.id);
   }
@@ -417,7 +426,14 @@ export class CallsService {
     call.ambulanceCurrentLatitude = driverLatitude;
     call.ambulanceCurrentLongitude = driverLongitude;
 
-    return this.callsRepository.save(call);
+    const savedCall = await this.callsRepository.save(call);
+
+    // Notify emergency contacts about hospital selection (async, don't block)
+    this.notifyEmergencyContactsAboutHospital(call, hospital.name, route.duration).catch((err) =>
+      console.error('Failed to notify emergency contacts about hospital:', err),
+    );
+
+    return savedCall;
   }
 
   /**
@@ -452,5 +468,90 @@ export class CallsService {
           }
         : null,
     };
+  }
+
+  /**
+   * Notify all emergency contacts about a new emergency call.
+   * Sends emails to contacts with email addresses.
+   */
+  private async notifyEmergencyContactsAboutCall(user: User, call: Call): Promise<void> {
+    const contacts = await this.contactsService.getUserContacts(user.id);
+
+    if (contacts.length === 0) {
+      console.log(`No emergency contacts found for user ${user.id}`);
+      return;
+    }
+
+    // Load user's stateArchive to get their name
+    const fullUser = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: ['stateArchive'],
+    });
+    const userName = fullUser?.stateArchive?.fullName || fullUser?.stateArchive?.email || 'A user';
+
+    const emailPromises = contacts
+      .filter((contact) => contact.email)
+      .map((contact) =>
+        this.mailService.sendEmergencyAlert(
+          contact.email!,
+          contact.name,
+          userName,
+          call.latitude,
+          call.longitude,
+          call.description,
+        ),
+      );
+
+    await Promise.all(emailPromises);
+
+    console.log(
+      `Emergency alerts sent to ${emailPromises.length} contact(s) for user ${user.id}`,
+    );
+  }
+
+  /**
+   * Notify all emergency contacts about which hospital the ambulance is heading to.
+   */
+  private async notifyEmergencyContactsAboutHospital(
+    call: Call,
+    hospitalName: string,
+    estimatedDuration?: number,
+  ): Promise<void> {
+    if (!call.user) {
+      console.log(`No user associated with call ${call.id}, skipping hospital notification`);
+      return;
+    }
+
+    const contacts = await this.contactsService.getUserContacts(call.user.id);
+
+    if (contacts.length === 0) {
+      console.log(`No emergency contacts found for user ${call.user.id}`);
+      return;
+    }
+
+    // Load user's stateArchive to get their name
+    const fullUser = await this.userRepository.findOne({
+      where: { id: call.user.id },
+      relations: ['stateArchive'],
+    });
+    const userName = fullUser?.stateArchive?.fullName || fullUser?.stateArchive?.email || 'Your contact';
+
+    const emailPromises = contacts
+      .filter((contact) => contact.email)
+      .map((contact) =>
+        this.mailService.sendHospitalUpdate(
+          contact.email!,
+          contact.name,
+          userName,
+          hospitalName,
+          estimatedDuration,
+        ),
+      );
+
+    await Promise.all(emailPromises);
+
+    console.log(
+      `Hospital updates sent to ${emailPromises.length} contact(s) for user ${call.user.id}`,
+    );
   }
 }

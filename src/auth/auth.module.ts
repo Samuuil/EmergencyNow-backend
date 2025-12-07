@@ -30,6 +30,6 @@ import { SmsService } from './services/sms.service';
   ],
   providers: [AuthService, JwtStrategy, MailService, SmsService],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [AuthService, MailService],
 })
 export class AuthModule {}
