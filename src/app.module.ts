@@ -12,6 +12,7 @@ import { StateArchiveModule } from './state-archive/state-archive.module';
 import { ContactsModule } from './contacts/contact.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { SeedingModule } from './seeding/seeding.module';
 
 
 @Module({
@@ -40,6 +41,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ContactsModule,
     HospitalsModule,
     RealtimeModule,
+    SeedingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
