@@ -14,22 +14,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: emergency_now_api
-    depends_on:
-      - postgres
+  redis:
+    image: redis:7-alpine
+    container_name: emergency_now_redis
     restart: always
-    env_file:
-      - .env
     ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    command: sh -c "npm install && npm run seed && npm run start:dev"
+      - "127.0.0.1:6379:6379"
+    command: redis-server --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
 
 volumes:
   pgdata:

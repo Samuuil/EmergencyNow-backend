@@ -1,17 +1,14 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
 import { UsersService } from '../users/user.service';
 import { StateArchiveService } from '../state-archive/state-archive.service';
 import { MailService } from './services/mail.service';
 import { SmsService } from './services/sms.service';
-import { VerificationCode } from './entities/verification-code.entity';
+import { VerificationCodeService } from './services/verification-code.service';
 import { InitiateLoginDto, LoginMethod } from './dto/initiate-login.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
 import { User } from '../users/entities/user.entity';
-import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -23,8 +20,7 @@ export class AuthService {
     private mailService: MailService,
     private smsService: SmsService,
     private configService: ConfigService,
-    @InjectRepository(VerificationCode)
-    private verificationCodeRepo: Repository<VerificationCode>,
+    private verificationCodeService: VerificationCodeService,
   ) {}
 
   async initiateLogin(dto: InitiateLoginDto): Promise<{ message: string }> {
@@ -34,19 +30,9 @@ export class AuthService {
       throw new NotFoundException('User not found in state archive');
     }
 
-    const code = crypto.randomInt(100000, 999999).toString();
+    const code = this.verificationCodeService.generateCode();
     
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-
-    const verificationCode = this.verificationCodeRepo.create({
-      egn: dto.egn,
-      code,
-      method: dto.method,
-      expiresAt,
-      isUsed: false,
-    });
-    await this.verificationCodeRepo.save(verificationCode);
+    await this.verificationCodeService.saveCode(dto.egn, code, dto.method);
 
     if (dto.method === LoginMethod.EMAIL) {
       await this.mailService.sendVerificationCode(
@@ -66,24 +52,8 @@ export class AuthService {
   }
 
   async verifyCode(dto: VerifyCodeDto): Promise<{ accessToken: string; refreshToken: string }> {
-    const verificationCode = await this.verificationCodeRepo.findOne({
-      where: {
-        egn: dto.egn,
-        code: dto.code,
-        isUsed: false,
-      },
-    });
-
-    if (!verificationCode) {
-      throw new UnauthorizedException('Invalid verification code');
-    }
-
-    if (new Date() > verificationCode.expiresAt) {
-      throw new UnauthorizedException('Verification code has expired');
-    }
-
-    verificationCode.isUsed = true;
-    await this.verificationCodeRepo.save(verificationCode);
+    // Verify and consume the code (automatically checks expiration and deletes)
+    await this.verificationCodeService.verifyAndConsumeCode(dto.egn, dto.code);
 
     const stateArchive = await this.stateArchiveService.findByEgn(dto.egn);
     if (!stateArchive) {
@@ -156,11 +126,5 @@ export class AuthService {
   async logout(userId: string): Promise<{ message: string }> {
     await this.usersService.updateRefreshToken(userId, null);
     return { message: 'Logged out successfully' };
-  }
-
-  async cleanupExpiredCodes(): Promise<void> {
-    await this.verificationCodeRepo.delete({
-      expiresAt: LessThan(new Date()),
-    });
   }
 }
