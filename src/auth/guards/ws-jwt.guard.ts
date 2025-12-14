@@ -1,9 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
+  private readonly logger = new Logger(WsJwtGuard.name);
+
   constructor(private readonly jwt: JwtService, private readonly config: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -11,6 +13,7 @@ export class WsJwtGuard implements CanActivate {
     const token = this.extractToken(client);
 
     if (!token) {
+      this.logger.warn('WS Auth failed: Missing token');
       throw new UnauthorizedException('Missing token');
     }
 
@@ -20,8 +23,10 @@ export class WsJwtGuard implements CanActivate {
       });
       // Attach a lightweight user object on the socket for downstream use
       client.user = { id: payload.sub, role: payload.role, egn: payload.egn };
+      this.logger.log(`WS Auth success: User ${payload.sub} authenticated`);
       return true;
     } catch (e) {
+      this.logger.error(`WS Auth failed: Invalid token - ${e.message}`);
       throw new UnauthorizedException('Invalid token');
     }
   }
