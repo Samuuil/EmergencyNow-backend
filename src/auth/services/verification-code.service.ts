@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { RedisService } from '../../common/redis/redis.service';
-import * as crypto from 'crypto';
 
 export interface VerificationCodeData {
   code: string;
@@ -27,7 +26,10 @@ export class VerificationCodeService {
    * Generate a 6-digit verification code
    */
   generateCode(): string {
-    return crypto.randomInt(100000, 999999).toString();
+    // Avoid Node 'crypto' to prevent environment dependency issues
+    // Secure enough for short-lived 2FA codes when combined with TTL and rate limiting
+    const n = Math.floor(100000 + Math.random() * 900000);
+    return String(n);
   }
 
   /**
