@@ -15,6 +15,14 @@ export class VerificationCodeService {
 
   constructor(private redisService: RedisService) {}
 
+  private normalizeEgn(egn: string): string {
+    return (egn ?? '').trim();
+  }
+
+  private normalizeCode(code: string): string {
+    return (code ?? '').trim();
+  }
+
   /**
    * Generate a 6-digit verification code
    */
@@ -33,8 +41,10 @@ export class VerificationCodeService {
    * Save verification code to Redis with TTL
    */
   async saveCode(egn: string, code: string, method: 'email' | 'sms'): Promise<void> {
-    const key = this.buildKey(egn, method);
-    const data: VerificationCodeData = { code, method, egn };
+    const normEgn = this.normalizeEgn(egn);
+    const normCode = this.normalizeCode(code);
+    const key = this.buildKey(normEgn, method);
+    const data: VerificationCodeData = { code: normCode, method, egn: normEgn };
     
     await this.redisService.setex(
       key,
@@ -45,46 +55,50 @@ export class VerificationCodeService {
 
   /**
    * Verify code and consume it (one-time use)
-   * Returns the verification data if valid, throws UnauthorizedException otherwise
+   * Returns the verification data if valid, throws UnauthorizedException otherwise.
+   *
+   * Important: We DO NOT delete codes unless the provided code matches.
+   * This prevents accidental consumption when a wrong code is submitted.
    */
   async verifyAndConsumeCode(egn: string, code: string): Promise<VerificationCodeData> {
+    const normEgn = this.normalizeEgn(egn);
+    const normCode = this.normalizeCode(code);
     // Try both email and SMS methods
-    const emailKey = this.buildKey(egn, 'email');
-    const smsKey = this.buildKey(egn, 'sms');
+    const emailKey = this.buildKey(normEgn, 'email');
+    const smsKey = this.buildKey(normEgn, 'sms');
 
-    // Get and delete from both keys (GETDEL is atomic)
-    const emailData = await this.redisService.getdel(emailKey);
-    const smsData = await this.redisService.getdel(smsKey);
+    // Read values without deleting first
+    const [emailData, smsData] = await Promise.all([
+      this.redisService.get(emailKey),
+      this.redisService.get(smsKey),
+    ]);
 
-    let verificationData: VerificationCodeData | null = null;
-
-    if (emailData) {
+    // Helper to parse JSON safely
+    const tryParse = (val: string | null): VerificationCodeData | null => {
+      if (!val) return null;
       try {
-        const parsed = JSON.parse(emailData);
-        if (parsed.code === code) {
-          verificationData = parsed;
-        }
-      } catch (error) {
-        // Invalid JSON, ignore
+        return JSON.parse(val);
+      } catch {
+        return null;
       }
+    };
+
+    const emailParsed = tryParse(emailData);
+    if (emailParsed && emailParsed.code === normCode) {
+      // Consume the correct key only
+      await this.redisService.del(emailKey);
+      return emailParsed;
     }
 
-    if (!verificationData && smsData) {
-      try {
-        const parsed = JSON.parse(smsData);
-        if (parsed.code === code) {
-          verificationData = parsed;
-        }
-      } catch (error) {
-        // Invalid JSON, ignore
-      }
+    const smsParsed = tryParse(smsData);
+    if (smsParsed && smsParsed.code === normCode) {
+      // Consume the correct key only
+      await this.redisService.del(smsKey);
+      return smsParsed;
     }
 
-    if (!verificationData) {
-      throw new UnauthorizedException('Invalid or expired verification code');
-    }
-
-    return verificationData;
+    // No match found
+    throw new UnauthorizedException('Invalid or expired verification code');
   }
 
   /**
