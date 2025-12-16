@@ -22,9 +22,9 @@
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
-    "seed": "ts-node src/seeding/seed.ts seed",
-    "seed:clear": "ts-node src/seeding/seed.ts clear",
-    "seed:reset": "ts-node src/seeding/seed.ts reset"
+    "seed": "ts-node -r tsconfig-paths/register src/seeding/seed.ts seed",
+    "seed:clear": "ts-node -r tsconfig-paths/register src/seeding/seed.ts clear",
+    "seed:reset": "ts-node -r tsconfig-paths/register src/seeding/seed.ts reset"
   },
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.4.2",
