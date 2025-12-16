@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CallsService } from './call.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
@@ -8,32 +9,39 @@ import { CallStatus } from '../common/enums/call-status.enum';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
+@ApiTags('Calls')
+@ApiBearerAuth('AccessToken')
 @Controller('calls')
 @UseGuards(JwtAuthGuard)
 export class CallsController {
   constructor(private readonly callsService: CallsService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new emergency call' })
   create(@Body() dto: CreateCallDto, @CurrentUser() user: User): Promise<Call> {
     return this.callsService.create(dto, user);
   }
 
   @Get()
+  @ApiOperation({ summary: 'Get all calls' })
   findAll(): Promise<Call[]> {
     return this.callsService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get call by ID' })
   findOne(@Param('id') id: string): Promise<Call> {
     return this.callsService.findOne(id);
   }
 
   @Get(':id/tracking')
+  @ApiOperation({ summary: 'Get tracking data for call' })
   getTrackingData(@Param('id') id: string) {
     return this.callsService.getTrackingData(id);
   }
 
   @Post(':id/hospitals')
+  @ApiOperation({ summary: 'Get nearby hospitals for call' })
   getHospitalsForCall(
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number },
@@ -42,6 +50,7 @@ export class CallsController {
   }
 
   @Post(':id/select-hospital')
+  @ApiOperation({ summary: 'Select hospital for call' })
   selectHospital(
     @Param('id') id: string,
     @Body() body: { hospitalId: string; latitude: number; longitude: number },
@@ -55,16 +64,19 @@ export class CallsController {
   }
 
   @Get(':id/hospital-route')
+  @ApiOperation({ summary: 'Get route to selected hospital' })
   getHospitalRoute(@Param('id') id: string) {
     return this.callsService.getHospitalRouteData(id);
   }
 
   @Post(':id/dispatch')
+  @ApiOperation({ summary: 'Dispatch nearest ambulance to call' })
   dispatchAmbulance(@Param('id') id: string): Promise<Call> {
     return this.callsService.dispatchNearestAmbulance(id);
   }
 
   @Patch(':id/location')
+  @ApiOperation({ summary: 'Update ambulance location for call' })
   updateAmbulanceLocation(
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number },
@@ -73,6 +85,7 @@ export class CallsController {
   }
 
   @Patch(':id/status')
+  @ApiOperation({ summary: 'Update call status' })
   updateStatus(
     @Param('id') id: string,
     @Body() body: { status: CallStatus },
@@ -81,11 +94,13 @@ export class CallsController {
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update call' })
   update(@Param('id') id: string, @Body() dto: UpdateCallDto): Promise<Call> {
     return this.callsService.update(id, dto);
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete call' })
   remove(@Param('id') id: string): Promise<{ message: string }> {
     return this.callsService.remove(id).then(() => ({ message: 'Call deleted successfully' }));
   }
