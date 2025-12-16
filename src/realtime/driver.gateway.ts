@@ -52,41 +52,20 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // Authenticate via JWT from handshake (header/auth/query)
-    const token = this.extractToken(client);
-    if (!token) {
-      this.logger.warn(`Missing token on WS connection; disconnecting.`);
+    // User is already authenticated by WsJwtGuard at this point
+    const user = (client as any).user;
+    if (!user || !user.id) {
+      this.logger.warn(`No user attached after guard; disconnecting.`);
       client.disconnect(true);
       return;
     }
-    try {
-      const payload: any = this.jwt.verify(token, {
-        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
-      });
-      const user = { id: payload.sub, role: payload.role, egn: payload.egn };
-      (client as any).user = user;
-      // Accept connection; only assigned drivers will receive offers
-      this.driverSockets.set(user.id, client.id);
-      this.socketDrivers.set(client.id, user.id);
-      this.logger.log(`User ${user.id} connected via WS (socket ${client.id})`);
-    } catch (e) {
-      this.logger.warn(`Invalid token on WS connection; disconnecting.`);
-      client.disconnect(true);
-    }
+    
+    // Store the driver connection
+    this.driverSockets.set(user.id, client.id);
+    this.socketDrivers.set(client.id, user.id);
+    this.logger.log(`Driver ${user.id} connected via WS (socket ${client.id})`);
   }
 
-  private extractToken(client: Socket): string | null {
-    const headers = (client as any)?.handshake?.headers || {};
-    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
-    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      return authHeader.slice(7);
-    }
-    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
-    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
-    const tokenFromQuery = (client as any)?.handshake?.query?.token as string | undefined;
-    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery;
-    return null;
-  }
 
   handleDisconnect(client: Socket) {
     const driverId = this.socketDrivers.get(client.id);

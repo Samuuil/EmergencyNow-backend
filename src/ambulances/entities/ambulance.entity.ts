@@ -23,6 +23,9 @@ export class Ambulance {
   @Column({ type: 'uuid', nullable: true })
   driverId: string | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  lastCallAcceptedAt: Date | null;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 

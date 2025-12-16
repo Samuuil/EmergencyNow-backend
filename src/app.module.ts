@@ -3,6 +3,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { RedisModule } from './common/redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { AmbulancesModule } from './ambulances/ambulance.module';
 import { CallsModule } from './calls/call.module';
@@ -18,6 +20,8 @@ import { SeedingModule } from './seeding/seeding.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
+    RedisModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
