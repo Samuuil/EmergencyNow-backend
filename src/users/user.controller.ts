@@ -16,6 +16,8 @@ import {
   import { Roles } from '../auth/decorators/roles.decorator';
   import { Role } from '../common/enums/role.enum';
   import { User } from './entities/user.entity';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+  
   
   @ApiTags('Users')
   @Controller('users')
@@ -24,7 +26,7 @@ import {
     constructor(private readonly usersService: UsersService) {}
   
     @Post()
-    // @Roles(Role.ADMIN)
+    @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Create a new user' })
     @Roles(Role.ADMIN)
     async create(@Body() dto: CreateUserDto): Promise<User> {
