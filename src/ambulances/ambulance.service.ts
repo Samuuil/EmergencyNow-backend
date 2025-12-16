@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ambulance } from './entities/ambulance.entity';
@@ -6,6 +6,7 @@ import { User } from '../users/entities/user.entity';
 import { GoogleMapsService, Location } from '../common/services/google-maps.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
+import { AmbulanceErrorCode, AmbulanceErrorMessages } from './errors/ambulance-errors.enum';
 
 export interface AmbulanceWithDistance extends Ambulance {
   distance: number;
@@ -14,6 +15,8 @@ export interface AmbulanceWithDistance extends Ambulance {
 
 @Injectable()
 export class AmbulancesService {
+  private readonly logger = new Logger(AmbulancesService.name);
+
   constructor(
     @InjectRepository(Ambulance)
     private readonly ambulanceRepository: Repository<Ambulance>,
@@ -23,85 +26,160 @@ export class AmbulancesService {
   ) {}
 
   async create(dto: CreateAmbulanceDto, driverId?: string): Promise<Ambulance> {
-    const existing = await this.ambulanceRepository.findOne({
-      where: { licensePlate: dto.licensePlate },
-    });
-    if (existing) {
-      throw new ConflictException(`Ambulance with license plate ${dto.licensePlate} already exists`);
-    }
-  
-    if (driverId) {
-      const driver = await this.userRepository.findOne({
-        where: { id: driverId },
+    try {
+      const existing = await this.ambulanceRepository.findOne({
+        where: { licensePlate: dto.licensePlate },
       });
-      if (!driver) {
-        throw new NotFoundException(`Driver with ID ${driverId} not found`);
+      if (existing) {
+        throw new ConflictException({
+          code: AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS,
+          message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS],
+        });
       }
+    
+      if (driverId) {
+        const driver = await this.userRepository.findOne({
+          where: { id: driverId },
+        });
+        if (!driver) {
+          throw new NotFoundException({
+            code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
+            message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
+          });
+        }
+      }
+    
+      const ambulance = this.ambulanceRepository.create({
+        ...dto,
+        driverId: driverId ?? null,
+        available: true,
+      });
+    
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.AMBULANCE_CREATION_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED],
+      });
     }
-  
-    const ambulance = this.ambulanceRepository.create({
-      ...dto,
-      driverId: driverId ?? null,
-      available: true,
-    });
-  
-    return await this.ambulanceRepository.save(ambulance);
   }
   
   
   
   async findAll(): Promise<Ambulance[]> {
-    return this.ambulanceRepository.find();
+    try {
+      return await this.ambulanceRepository.find();
+    } catch (error) {
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DATABASE_ERROR,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
+      });
+    }
   }
 
   async findOne(id: string): Promise<Ambulance> {
-    const ambulance = await this.ambulanceRepository.findOne({
-      where: { id },
-    });
+    try {
+      const ambulance = await this.ambulanceRepository.findOne({
+        where: { id },
+      });
 
-    if (!ambulance) {
-      throw new NotFoundException(`Ambulance with ID ${id} not found`);
+      if (!ambulance) {
+        throw new NotFoundException({
+          code: AmbulanceErrorCode.AMBULANCE_NOT_FOUND,
+          message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_NOT_FOUND],
+        });
+      }
+
+      return ambulance;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DATABASE_ERROR,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
+      });
     }
-
-    return ambulance;
   }
 
   async update(id: string, dto: UpdateAmbulanceDto): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
+    try {
+      const ambulance = await this.findOne(id);
 
-    if (dto.licensePlate && dto.licensePlate !== ambulance.licensePlate) {
-      const existingAmbulance = await this.ambulanceRepository.findOne({
-        where: { licensePlate: dto.licensePlate },
-      });
+      if (dto.licensePlate && dto.licensePlate !== ambulance.licensePlate) {
+        const existingAmbulance = await this.ambulanceRepository.findOne({
+          where: { licensePlate: dto.licensePlate },
+        });
 
-      if (existingAmbulance) {
-        throw new ConflictException(`Ambulance with license plate ${dto.licensePlate} already exists`);
+        if (existingAmbulance) {
+          throw new ConflictException({
+            code: AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS,
+            message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS],
+          });
+        }
       }
-    }
 
-    if (dto.driverId) {
-      const driver = await this.userRepository.findOne({
-        where: { id: dto.driverId },
-      });
+      if (dto.driverId) {
+        const driver = await this.userRepository.findOne({
+          where: { id: dto.driverId },
+        });
 
-      if (!driver) {
-        throw new NotFoundException(`Driver with ID ${dto.driverId} not found`);
+        if (!driver) {
+          throw new NotFoundException({
+            code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
+            message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
+          });
+        }
       }
-    }
 
-    Object.assign(ambulance, dto);
-    return await this.ambulanceRepository.save(ambulance);
+      Object.assign(ambulance, dto);
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+      });
+    }
   }
 
   async remove(id: string): Promise<void> {
-    const ambulance = await this.findOne(id);
-    await this.ambulanceRepository.remove(ambulance);
+    try {
+      const ambulance = await this.findOne(id);
+      await this.ambulanceRepository.remove(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.AMBULANCE_DELETE_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED],
+      });
+    }
   }
 
   async findAvailable(): Promise<Ambulance[]> {
-    return this.ambulanceRepository.find({
-      where: { available: true },
-    });
+    try {
+      return await this.ambulanceRepository.find({
+        where: { available: true },
+      });
+    } catch (error) {
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DATABASE_ERROR,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
+      });
+    }
   }
 
   async findAvailableWithDriver(): Promise<Ambulance[]> {
@@ -215,52 +293,113 @@ export class AmbulancesService {
   }
 
   async markAsDispatched(id: string): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
-    ambulance.available = false;
-    return this.ambulanceRepository.save(ambulance);
+    try {
+      const ambulance = await this.findOne(id);
+      ambulance.available = false;
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+      });
+    }
   }
 
   async markAsAvailable(id: string): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
-    ambulance.available = true;
-    return this.ambulanceRepository.save(ambulance);
+    try {
+      const ambulance = await this.findOne(id);
+      ambulance.available = true;
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+      });
+    }
   }
 
   async updateLocation(id: string, latitude: number, longitude: number): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
-    ambulance.latitude = latitude;
-    ambulance.longitude = longitude;
-    return this.ambulanceRepository.save(ambulance);
+    try {
+      const ambulance = await this.findOne(id);
+      ambulance.latitude = latitude;
+      ambulance.longitude = longitude;
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.LOCATION_UPDATE_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED],
+      });
+    }
   }
 
   async assignDriver(id: string, driverId: string): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
+    try {
+      const ambulance = await this.findOne(id);
 
-    const driver = await this.userRepository.findOne({
-      where: { id: driverId },
-    });
+      const driver = await this.userRepository.findOne({
+        where: { id: driverId },
+      });
 
-    if (!driver) {
-      throw new NotFoundException(`Driver with ID ${driverId} not found`);
+      if (!driver) {
+        throw new NotFoundException({
+          code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
+          message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
+        });
+      }
+
+      const ambulanceWithDriver = await this.ambulanceRepository.findOne({
+        where: { driverId },
+      });
+
+      if (ambulanceWithDriver && ambulanceWithDriver.id !== id) {
+        throw new BadRequestException({
+          code: AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED,
+          message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED],
+        });
+      }
+
+      ambulance.driverId = driverId;
+      ambulance.lastCallAcceptedAt = new Date(); // Initialize activity timestamp
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED],
+      });
     }
-
-    const ambulanceWithDriver = await this.ambulanceRepository.findOne({
-      where: { driverId },
-    });
-
-    if (ambulanceWithDriver && ambulanceWithDriver.id !== id) {
-      throw new BadRequestException(`Driver is already assigned to another ambulance`);
-    }
-
-    ambulance.driverId = driverId;
-    ambulance.lastCallAcceptedAt = new Date(); // Initialize activity timestamp
-    return await this.ambulanceRepository.save(ambulance);
   }
 
   async removeDriver(id: string): Promise<Ambulance> {
-    const ambulance = await this.findOne(id);
-    ambulance.driverId = null;
-    return await this.ambulanceRepository.save(ambulance);
+    try {
+      const ambulance = await this.findOne(id);
+      ambulance.driverId = null;
+      return await this.ambulanceRepository.save(ambulance);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DRIVER_REMOVAL_FAILED,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED],
+      });
+    }
   }
 
   async findByDriver(driverId: string): Promise<Ambulance | null> {

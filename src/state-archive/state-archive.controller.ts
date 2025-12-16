@@ -12,6 +12,7 @@ import {
   import { StateArchiveService } from './state-archive.service';
   import { CreateStateArchiveDto } from './dto/create-state-archive.dto';
   import { UpdateStateArchiveDto } from './dto/update-state-archive.dto';
+  import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
   import { RolesGuard } from '../auth/guards/roles.guard';
   import { Roles } from '../auth/decorators/roles.decorator';
   import { Role } from '../common/enums/role.enum';
