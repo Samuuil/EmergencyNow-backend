@@ -18,12 +18,12 @@ import {
   import { User } from './entities/user.entity';
   
   @Controller('users')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   export class UsersController {
     constructor(private readonly usersService: UsersService) {}
   
     @Post()
-    // @Roles(Role.ADMIN)
+    @Roles(Role.ADMIN)
     async create(@Body() dto: CreateUserDto): Promise<User> {
       return await this.usersService.create(dto);
     }

@@ -18,8 +18,8 @@ import {
   import { StateArchive } from './entities/state-archive.entity';
   
   @Controller('state-archive')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(Role.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   export class StateArchiveController {
     constructor(private readonly stateArchiveService: StateArchiveService) {}
   
