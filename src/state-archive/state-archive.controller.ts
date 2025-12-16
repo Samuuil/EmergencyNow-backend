@@ -16,6 +16,7 @@ import {
   import { Roles } from '../auth/decorators/roles.decorator';
   import { Role } from '../common/enums/role.enum';
   import { StateArchive } from './entities/state-archive.entity';
+  import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
   
   @ApiTags('State Archive')
   @Controller('state-archive')
