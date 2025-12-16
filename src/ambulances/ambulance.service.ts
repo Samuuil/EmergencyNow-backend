@@ -253,6 +253,7 @@ export class AmbulancesService {
     }
 
     ambulance.driverId = driverId;
+    ambulance.lastCallAcceptedAt = new Date(); // Initialize activity timestamp
     return await this.ambulanceRepository.save(ambulance);
   }
 
@@ -277,5 +278,39 @@ export class AmbulancesService {
       }
     }
     return map;
+  }
+
+  async updateLastCallAcceptedAt(ambulanceId: string): Promise<void> {
+    await this.ambulanceRepository.update(ambulanceId, {
+      lastCallAcceptedAt: new Date(),
+    });
+  }
+
+  async removeInactiveDrivers(inactivityThresholdHours: number = 5): Promise<string[]> {
+    const thresholdDate = new Date();
+    thresholdDate.setHours(thresholdDate.getHours() - inactivityThresholdHours);
+
+    // Find all ambulances with drivers that haven't accepted calls recently
+    const inactiveAmbulances = await this.ambulanceRepository
+      .createQueryBuilder('ambulance')
+      .where('ambulance.driverId IS NOT NULL')
+      .andWhere(
+        '(ambulance.lastCallAcceptedAt IS NULL OR ambulance.lastCallAcceptedAt < :threshold)',
+        { threshold: thresholdDate }
+      )
+      .getMany();
+
+    const removedDriverIds: string[] = [];
+
+    for (const ambulance of inactiveAmbulances) {
+      if (ambulance.driverId) {
+        removedDriverIds.push(ambulance.driverId);
+        ambulance.driverId = null;
+        ambulance.lastCallAcceptedAt = null;
+        await this.ambulanceRepository.save(ambulance);
+      }
+    }
+
+    return removedDriverIds;
   }
 }

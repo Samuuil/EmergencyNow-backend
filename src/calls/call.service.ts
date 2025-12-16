@@ -183,6 +183,7 @@ export class CallsService {
     call.dispatchedAt = new Date();
 
     await this.ambulancesService.markAsDispatched(ambulance.id);
+    await this.ambulancesService.updateLastCallAcceptedAt(ambulance.id);
     await this.callsRepository.save(call);
 
     this.driverGateway.clearOffer(callId);
