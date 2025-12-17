@@ -39,12 +39,12 @@ export class HospitalsService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.hospitalRepository, {
-        sortableColumns: ['name', 'city', 'createdAt'],
+        sortableColumns: ['id', 'name', 'address', 'createdAt'],
         defaultSortBy: [['name', 'ASC']],
-        searchableColumns: ['name', 'address', 'city'],
+        searchableColumns: ['name', 'address'],
         filterableColumns: {
           name: [FilterOperator.ILIKE],
-          city: [FilterOperator.ILIKE],
+          address: [FilterOperator.ILIKE],
           isActive: [FilterOperator.EQ],
         },
         where: { isActive: true },

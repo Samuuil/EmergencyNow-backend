@@ -42,13 +42,14 @@ export class StateArchiveService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.archiveRepo, {
-        sortableColumns: ['egn', 'firstName', 'lastName', 'createdAt'],
-        defaultSortBy: [['createdAt', 'DESC']],
-        searchableColumns: ['egn', 'firstName', 'lastName'],
+        sortableColumns: ['id', 'egn', 'fullName', 'email', 'phoneNumber'],
+        defaultSortBy: [['fullName', 'ASC']],
+        searchableColumns: ['egn', 'fullName', 'email', 'phoneNumber'],
         filterableColumns: {
           egn: [FilterOperator.ILIKE],
-          firstName: [FilterOperator.ILIKE],
-          lastName: [FilterOperator.ILIKE],
+          fullName: [FilterOperator.ILIKE],
+          email: [FilterOperator.ILIKE],
+          phoneNumber: [FilterOperator.ILIKE],
         },
         defaultLimit: 10,
         maxLimit: 100,

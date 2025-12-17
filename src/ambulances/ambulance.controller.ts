@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { Paginate, PaginateQuery } from 'nestjs-paginate';
+import { Paginate } from 'nestjs-paginate';
+import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
 import { AmbulancesService } from './ambulance.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
