@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/createUser.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
@@ -29,10 +30,19 @@ export class UsersService {
     }
   }
 
-  async findAll(): Promise<User[]> {
+  async findAll(query: PaginateQuery) {
     try {
-      return await this.usersRepository.find({
+      return paginate(query, this.usersRepository, {
+        sortableColumns: ['email', 'role', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['email'],
+        filterableColumns: {
+          email: [FilterOperator.ILIKE],
+          role: [FilterOperator.EQ],
+        },
         relations: ['profile', 'contacts', 'calls', 'stateArchive'],
+        defaultLimit: 10,
+        maxLimit: 100,
       });
     } catch (error) {
       this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);

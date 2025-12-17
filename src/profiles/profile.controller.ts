@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Put } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Paginate, PaginateQuery } from 'nestjs-paginate';
+import { BasePaginationDto } from '../common/dtos';
 import { ProfilesService } from './profile.service';
 import { CreateProfileDto } from './dto/createProfile.dto';
 import { UpdateProfileDto } from './dto/updateProfile.dto';
@@ -20,8 +22,9 @@ export class ProfilesController {
 
   @Get()
   @ApiOperation({ summary: 'Get all profiles' })
-  findAll(): Promise<Profile[]> {
-    return this.profilesService.findAll();
+  @ApiQuery({ type: BasePaginationDto })
+  findAll(@Paginate() query: PaginateQuery) {
+    return this.profilesService.findAll(query);
   }
 
   @Get(':id')

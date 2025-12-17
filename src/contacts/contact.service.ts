@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, InternalServerError
 import { ContactErrorCode, ContactErrorMessages } from './errors/contact-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Contact } from './entities/contact.entity';
 import { CreateContactDto } from './dto/createContact.dto';
 import { UpdateContactDto } from './dto/updateContact.dto';
@@ -32,9 +33,20 @@ export class ContactsService {
     }
   }
 
-  async findAll(): Promise<Contact[]> {
+  async findAll(query: PaginateQuery) {
     try {
-      return await this.contactsRepository.find({ relations: ['user'] });
+      return paginate(query, this.contactsRepository, {
+        sortableColumns: ['name', 'phoneNumber', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['name', 'phoneNumber'],
+        filterableColumns: {
+          name: [FilterOperator.ILIKE],
+          phoneNumber: [FilterOperator.ILIKE],
+        },
+        relations: ['user'],
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
     } catch (error) {
       this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
       throw new InternalServerErrorException({
@@ -104,7 +116,30 @@ export class ContactsService {
     }
   }
 
-  async getUserContacts(userId: string): Promise<Contact[]> {
+  async getUserContacts(userId: string, query: PaginateQuery) {
+    try {
+      return paginate(query, this.contactsRepository, {
+        sortableColumns: ['name', 'phoneNumber', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['name', 'phoneNumber'],
+        filterableColumns: {
+          name: [FilterOperator.ILIKE],
+          phoneNumber: [FilterOperator.ILIKE],
+        },
+        where: { user: { id: userId } },
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
+    } catch (error) {
+      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: ContactErrorCode.DATABASE_ERROR,
+        message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
+
+  async getUserContactsList(userId: string): Promise<Contact[]> {
     try {
       const contacts = await this.contactsRepository.find({
         where: { user: { id: userId } },

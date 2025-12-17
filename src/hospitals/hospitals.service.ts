@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, InternalServerErrorException, Logger } f
 import { HospitalErrorCode, HospitalErrorMessages } from './errors/hospital-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Hospital } from './entities/hospital.entity';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
 import { UpdateHospitalDto } from './dto/update-hospital.dto';
@@ -35,7 +36,31 @@ export class HospitalsService {
     }
   }
 
-  async findAll(): Promise<Hospital[]> {
+  async findAll(query: PaginateQuery) {
+    try {
+      return paginate(query, this.hospitalRepository, {
+        sortableColumns: ['name', 'city', 'createdAt'],
+        defaultSortBy: [['name', 'ASC']],
+        searchableColumns: ['name', 'address', 'city'],
+        filterableColumns: {
+          name: [FilterOperator.ILIKE],
+          city: [FilterOperator.ILIKE],
+          isActive: [FilterOperator.EQ],
+        },
+        where: { isActive: true },
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
+    } catch (error) {
+      this.logger.error(`${HospitalErrorMessages[HospitalErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: HospitalErrorCode.DATABASE_ERROR,
+        message: HospitalErrorMessages[HospitalErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
+
+  async findAllList(): Promise<Hospital[]> {
     try {
       return await this.hospitalRepository.find({
         where: { isActive: true },
@@ -113,7 +138,7 @@ export class HospitalsService {
     limit: number = 10,
   ): Promise<HospitalWithDistance[]> {
     try {
-      const hospitals = await this.findAll();
+      const hospitals = await this.findAllList();
 
       if (hospitals.length === 0) {
         return [];

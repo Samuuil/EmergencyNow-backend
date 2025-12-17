@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Paginate, PaginateQuery } from 'nestjs-paginate';
+import { BasePaginationDto } from '../common/dtos';
 import { AmbulancesService } from './ambulance.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
@@ -19,14 +21,16 @@ export class AmbulancesController {
 
   @Get()
   @ApiOperation({ summary: 'Get all ambulances' })
-  findAll(): Promise<Ambulance[]> {
-    return this.ambulancesService.findAll();
+  @ApiQuery({ type: BasePaginationDto })
+  findAll(@Paginate() query: PaginateQuery) {
+    return this.ambulancesService.findAll(query);
   }
 
   @Get('available')
   @ApiOperation({ summary: 'Get all available ambulances' })
-  findAvailable(): Promise<Ambulance[]> {
-    return this.ambulancesService.findAvailable();
+  @ApiQuery({ type: BasePaginationDto })
+  findAvailable(@Paginate() query: PaginateQuery) {
+    return this.ambulancesService.findAvailable(query);
   }
 
   @Get('driver/:driverId')

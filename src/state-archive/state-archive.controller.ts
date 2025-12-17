@@ -8,7 +8,9 @@ import {
     Patch,
     UseGuards,
   } from '@nestjs/common';
-  import { ApiTags, ApiOperation } from '@nestjs/swagger';
+  import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+  import { Paginate, PaginateQuery } from 'nestjs-paginate';
+  import { BasePaginationDto } from '../common/dtos';
   import { StateArchiveService } from './state-archive.service';
   import { CreateStateArchiveDto } from './dto/create-state-archive.dto';
   import { UpdateStateArchiveDto } from './dto/update-state-archive.dto';
@@ -34,8 +36,9 @@ import {
   
     @Get()
     @ApiOperation({ summary: 'Get all state archive entries' })
-    async findAll(): Promise<StateArchive[]> {
-      return await this.stateArchiveService.findAll();
+    @ApiQuery({ type: BasePaginationDto })
+    async findAll(@Paginate() query: PaginateQuery) {
+      return await this.stateArchiveService.findAll(query);
     }
   
     @Get(':id')

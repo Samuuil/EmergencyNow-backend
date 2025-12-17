@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Paginate, PaginateQuery } from 'nestjs-paginate';
+import { BasePaginationDto } from '../common/dtos';
 import { HospitalsService } from './hospitals.service';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
 import { UpdateHospitalDto } from './dto/update-hospital.dto';
@@ -18,8 +20,9 @@ export class HospitalsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all hospitals' })
-  findAll(): Promise<Hospital[]> {
-    return this.hospitalsService.findAll();
+  @ApiQuery({ type: BasePaginationDto })
+  findAll(@Paginate() query: PaginateQuery) {
+    return this.hospitalsService.findAll(query);
   }
 
   @Get('nearest')

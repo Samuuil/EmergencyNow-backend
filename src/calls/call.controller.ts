@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Paginate, PaginateQuery } from 'nestjs-paginate';
+import { BasePaginationDto } from '../common/dtos';
 import { CallsService } from './call.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
@@ -24,8 +26,9 @@ export class CallsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all calls' })
-  findAll(): Promise<Call[]> {
-    return this.callsService.findAll();
+  @ApiQuery({ type: BasePaginationDto })
+  findAll(@Paginate() query: PaginateQuery) {
+    return this.callsService.findAll(query);
   }
 
   @Get(':id')
