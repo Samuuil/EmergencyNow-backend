@@ -52,20 +52,31 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // User is already authenticated by WsJwtGuard at this point
-    const user = (client as any).user;
-    if (!user || !user.id) {
-      this.logger.warn(`No user attached after guard; disconnecting.`);
+    // Manually verify JWT since guards don't run on handleConnection
+    const token = this.extractToken(client);
+    if (!token) {
+      this.logger.warn('No token provided; disconnecting.');
       client.disconnect(true);
       return;
     }
-    
-    // Store the driver connection
-    this.driverSockets.set(user.id, client.id);
-    this.socketDrivers.set(client.id, user.id);
-    this.logger.log(`Driver ${user.id} connected via WS (socket ${client.id})`);
-  }
 
+    try {
+      const payload: any = this.jwt.verify(token, {
+        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+      });
+
+      // Attach user to socket for downstream use
+      (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
+
+      // Store the driver connection
+      this.driverSockets.set(payload.sub, client.id);
+      this.socketDrivers.set(client.id, payload.sub);
+      this.logger.log(`Driver ${payload.sub} connected via WS (socket ${client.id})`);
+    } catch (e: any) {
+      this.logger.warn(`Invalid token; disconnecting: ${e.message}`);
+      client.disconnect(true);
+    }
+  }
 
   handleDisconnect(client: Socket) {
     const driverId = this.socketDrivers.get(client.id);
