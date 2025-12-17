@@ -233,6 +233,23 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return this.driverSockets.has(driverId);
   }
 
+  private extractToken(client: Socket): string | null {
+    const headers = (client as any)?.handshake?.headers || {};
+    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7);
+    }
+
+    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
+    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+
+    const tokenFromQuery = (client as any)?.handshake?.query?.token;
+    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery as string;
+
+    return null;
+  }
+
   /**
    * Request fresh locations from all online drivers whose ambulances are available.
    * Waits up to `timeoutMs` for responses, then updates the database.
