@@ -9,7 +9,8 @@ import {
     UseGuards,
   } from '@nestjs/common';
   import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
-  import { Paginate, PaginateQuery } from 'nestjs-paginate';
+  import { Paginate } from 'nestjs-paginate';
+  import type { PaginateQuery } from 'nestjs-paginate';
   import { BasePaginationDto } from '../common/dtos';
   import { UsersService } from './user.service';
   import { CreateUserDto } from './dto/createUser.dto';

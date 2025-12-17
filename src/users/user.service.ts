@@ -33,11 +33,10 @@ export class UsersService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.usersRepository, {
-        sortableColumns: ['email', 'role', 'createdAt'],
-        defaultSortBy: [['createdAt', 'DESC']],
-        searchableColumns: ['email'],
+        sortableColumns: ['id', 'role'],
+        defaultSortBy: [['id', 'ASC']],
+        searchableColumns: [],
         filterableColumns: {
-          email: [FilterOperator.ILIKE],
           role: [FilterOperator.EQ],
         },
         relations: ['profile', 'contacts', 'calls', 'stateArchive'],

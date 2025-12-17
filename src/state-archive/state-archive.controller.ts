@@ -9,7 +9,8 @@ import {
     UseGuards,
   } from '@nestjs/common';
   import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
-  import { Paginate, PaginateQuery } from 'nestjs-paginate';
+  import { Paginate } from 'nestjs-paginate';
+  import type { PaginateQuery } from 'nestjs-paginate';
   import { BasePaginationDto } from '../common/dtos';
   import { StateArchiveService } from './state-archive.service';
   import { CreateStateArchiveDto } from './dto/create-state-archive.dto';
@@ -19,7 +20,7 @@ import {
   import { Roles } from '../auth/decorators/roles.decorator';
   import { Role } from '../common/enums/role.enum';
   import { StateArchive } from './entities/state-archive.entity';
-  import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+ 
   
   @ApiTags('State Archive')
   @Controller('state-archive')

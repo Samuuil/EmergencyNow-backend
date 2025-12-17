@@ -35,12 +35,11 @@ export class ProfilesService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.profileRepository, {
-        sortableColumns: ['firstName', 'lastName', 'createdAt'],
-        defaultSortBy: [['createdAt', 'DESC']],
-        searchableColumns: ['firstName', 'lastName', 'address'],
+        sortableColumns: ['id', 'height', 'weight', 'gender'],
+        defaultSortBy: [['id', 'ASC']],
+        searchableColumns: [],
         filterableColumns: {
-          firstName: [FilterOperator.ILIKE],
-          lastName: [FilterOperator.ILIKE],
+          gender: [FilterOperator.EQ],
         },
         defaultLimit: 10,
         maxLimit: 100,

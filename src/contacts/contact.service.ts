@@ -36,12 +36,13 @@ export class ContactsService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.contactsRepository, {
-        sortableColumns: ['name', 'phoneNumber', 'createdAt'],
-        defaultSortBy: [['createdAt', 'DESC']],
-        searchableColumns: ['name', 'phoneNumber'],
+        sortableColumns: ['id', 'name', 'phoneNumber', 'email'],
+        defaultSortBy: [['name', 'ASC']],
+        searchableColumns: ['name', 'phoneNumber', 'email'],
         filterableColumns: {
           name: [FilterOperator.ILIKE],
           phoneNumber: [FilterOperator.ILIKE],
+          email: [FilterOperator.ILIKE],
         },
         relations: ['user'],
         defaultLimit: 10,
@@ -119,12 +120,13 @@ export class ContactsService {
   async getUserContacts(userId: string, query: PaginateQuery) {
     try {
       return paginate(query, this.contactsRepository, {
-        sortableColumns: ['name', 'phoneNumber', 'createdAt'],
-        defaultSortBy: [['createdAt', 'DESC']],
-        searchableColumns: ['name', 'phoneNumber'],
+        sortableColumns: ['id', 'name', 'phoneNumber', 'email'],
+        defaultSortBy: [['name', 'ASC']],
+        searchableColumns: ['name', 'phoneNumber', 'email'],
         filterableColumns: {
           name: [FilterOperator.ILIKE],
           phoneNumber: [FilterOperator.ILIKE],
+          email: [FilterOperator.ILIKE],
         },
         where: { user: { id: userId } },
         defaultLimit: 10,
