@@ -8,7 +8,9 @@ import {
     Delete,
     UseGuards,
   } from '@nestjs/common';
-  import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+  import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+  import { Paginate, PaginateQuery } from 'nestjs-paginate';
+  import { BasePaginationDto } from '../common/dtos';
   import { ContactsService } from './contact.service';
   import { CreateContactDto } from './dto/createContact.dto';
   import { UpdateContactDto } from './dto/updateContact.dto';
@@ -28,8 +30,9 @@ import {
     // User routes: authenticated users can manage their own contacts
     @Get('me')
     @ApiOperation({ summary: 'Get my contacts' })
-    async getMyContacts(@CurrentUser() user: any) {
-      return this.contactsService.getUserContacts(user.id);
+    @ApiQuery({ type: BasePaginationDto })
+    async getMyContacts(@CurrentUser() user: any, @Paginate() query: PaginateQuery) {
+      return this.contactsService.getUserContacts(user.id, query);
     }
 
     @Post('me')
@@ -72,8 +75,9 @@ import {
     @Get()
     @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Get all contacts (Admin only)' })
-    async findAll() {
-      return this.contactsService.findAll();
+    @ApiQuery({ type: BasePaginationDto })
+    async findAll(@Paginate() query: PaginateQuery) {
+      return this.contactsService.findAll(query);
     }
 
     @Get(':id')

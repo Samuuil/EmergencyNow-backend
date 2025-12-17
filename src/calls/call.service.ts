@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Call } from './entities/call.entity';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
@@ -339,8 +340,18 @@ export class CallsService {
     };
   }
 
-  findAll(): Promise<Call[]> {
-    return this.callsRepository.find({ relations: ['user', 'ambulance'] });
+  findAll(query: PaginateQuery) {
+    return paginate(query, this.callsRepository, {
+      sortableColumns: ['status', 'createdAt'],
+      defaultSortBy: [['createdAt', 'DESC']],
+      searchableColumns: ['description'],
+      filterableColumns: {
+        status: [FilterOperator.EQ],
+      },
+      relations: ['user', 'ambulance'],
+      defaultLimit: 10,
+      maxLimit: 100,
+    });
   }
 
   async findOne(id: string): Promise<Call> {
@@ -476,7 +487,7 @@ export class CallsService {
    * Sends emails to contacts with email addresses.
    */
   private async notifyEmergencyContactsAboutCall(user: User, call: Call): Promise<void> {
-    const contacts = await this.contactsService.getUserContacts(user.id);
+    const contacts = await this.contactsService.getUserContactsList(user.id);
 
     if (contacts.length === 0) {
       console.log(`No emergency contacts found for user ${user.id}`);
@@ -523,7 +534,7 @@ export class CallsService {
       return;
     }
 
-    const contacts = await this.contactsService.getUserContacts(call.user.id);
+    const contacts = await this.contactsService.getUserContactsList(call.user.id);
 
     if (contacts.length === 0) {
       console.log(`No emergency contacts found for user ${call.user.id}`);

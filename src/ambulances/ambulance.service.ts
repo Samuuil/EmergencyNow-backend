@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Ambulance } from './entities/ambulance.entity';
 import { User } from '../users/entities/user.entity';
 import { GoogleMapsService, Location } from '../common/services/google-maps.service';
@@ -70,9 +71,19 @@ export class AmbulancesService {
   
   
   
-  async findAll(): Promise<Ambulance[]> {
+  async findAll(query: PaginateQuery) {
     try {
-      return await this.ambulanceRepository.find();
+      return paginate(query, this.ambulanceRepository, {
+        sortableColumns: ['licensePlate', 'available', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['licensePlate'],
+        filterableColumns: {
+          available: [FilterOperator.EQ],
+          licensePlate: [FilterOperator.ILIKE],
+        },
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
     } catch (error) {
       this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
       throw new InternalServerErrorException({
@@ -168,7 +179,29 @@ export class AmbulancesService {
     }
   }
 
-  async findAvailable(): Promise<Ambulance[]> {
+  async findAvailable(query: PaginateQuery) {
+    try {
+      return paginate(query, this.ambulanceRepository, {
+        sortableColumns: ['licensePlate', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['licensePlate'],
+        filterableColumns: {
+          licensePlate: [FilterOperator.ILIKE],
+        },
+        where: { available: true },
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
+    } catch (error) {
+      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: AmbulanceErrorCode.DATABASE_ERROR,
+        message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
+
+  async findAvailableList(): Promise<Ambulance[]> {
     try {
       return await this.ambulanceRepository.find({
         where: { available: true },
@@ -207,7 +240,7 @@ export class AmbulancesService {
   async findNearestAvailableAmbulance(
     location: Location,
   ): Promise<AmbulanceWithDistance | null> {
-    const availableAmbulances = await this.findAvailable();
+    const availableAmbulances = await this.findAvailableList();
 
     if (availableAmbulances.length === 0) {
       return null;
@@ -252,7 +285,7 @@ export class AmbulancesService {
     location: Location,
     excludeAmbulanceIds: string[] = [],
   ): Promise<AmbulanceWithDistance | null> {
-    const availableAmbulances = await this.findAvailable();
+    const availableAmbulances = await this.findAvailableList();
 
     const filtered = availableAmbulances.filter(
       (amb) =>

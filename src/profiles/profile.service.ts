@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, InternalServerError
 import { ProfileErrorCode, ProfileErrorMessages } from './errors/profile-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Profile } from './entities/profile.entity';
 import { CreateProfileDto } from './dto/createProfile.dto';
 import { UpdateProfileDto } from './dto/updateProfile.dto';
@@ -31,9 +32,19 @@ export class ProfilesService {
     }
   }
 
-  async findAll(): Promise<Profile[]> {
+  async findAll(query: PaginateQuery) {
     try {
-      return await this.profileRepository.find();
+      return paginate(query, this.profileRepository, {
+        sortableColumns: ['firstName', 'lastName', 'createdAt'],
+        defaultSortBy: [['createdAt', 'DESC']],
+        searchableColumns: ['firstName', 'lastName', 'address'],
+        filterableColumns: {
+          firstName: [FilterOperator.ILIKE],
+          lastName: [FilterOperator.ILIKE],
+        },
+        defaultLimit: 10,
+        maxLimit: 100,
+      });
     } catch (error) {
       this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
       throw new InternalServerErrorException({

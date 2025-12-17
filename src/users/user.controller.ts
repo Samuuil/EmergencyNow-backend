@@ -8,7 +8,9 @@ import {
     Delete,
     UseGuards,
   } from '@nestjs/common';
-  import { ApiTags, ApiOperation } from '@nestjs/swagger';
+  import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+  import { Paginate, PaginateQuery } from 'nestjs-paginate';
+  import { BasePaginationDto } from '../common/dtos';
   import { UsersService } from './user.service';
   import { CreateUserDto } from './dto/createUser.dto';
   import { UpdateUserDto } from './dto/updateUser.dto';
@@ -17,14 +19,13 @@ import {
   import { Role } from '../common/enums/role.enum';
   import { User } from './entities/user.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-  
-  
-  @ApiTags('Users')
-  @Controller('users')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  export class UsersController {
+
+@ApiTags('Users')
+@Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class UsersController {
     constructor(private readonly usersService: UsersService) {}
-  
+
     @Post()
     @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Create a new user' })
@@ -32,14 +33,15 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
     async create(@Body() dto: CreateUserDto): Promise<User> {
       return await this.usersService.create(dto);
     }
-  
+
     @Get()
     @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Get all users (Admin only)' })
-    async findAll(): Promise<User[]> {
-      return await this.usersService.findAll();
+    @ApiQuery({ type: BasePaginationDto })
+    async findAll(@Paginate() query: PaginateQuery) {
+      return await this.usersService.findAll(query);
     }
-  
+
     @Get(':id')
     @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Get user by ID (Admin only)' })
