@@ -139,13 +139,18 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: { callId: string; latitude: number; longitude: number },
   ) {
     const driverId = this.socketDrivers.get(client.id);
-    if (!driverId) return;
+    this.logger.log(`[location.update] Received from socket ${client.id}, driverId=${driverId}, callId=${data?.callId}, lat=${data?.latitude}, lng=${data?.longitude}`);
+    if (!driverId) {
+      this.logger.warn(`[location.update] No driverId found for socket ${client.id}; ignoring`);
+      return;
+    }
     try {
       const call = await this.callsService.updateAmbulanceLocation(
         data.callId,
         data.latitude,
         data.longitude,
       );
+      this.logger.log(`[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`);
       if (call && call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
         this.emitToDriver(driverId, 'route.update', {
           callId: call.id,

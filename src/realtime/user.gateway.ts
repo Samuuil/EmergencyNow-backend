@@ -118,6 +118,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } | null;
     },
   ) {
+    this.logger.log(`[notifyLocationUpdate] Emitting ambulance.location to user ${userId}, callId=${payload.callId}, lat=${payload.ambulanceLocation.latitude}, lng=${payload.ambulanceLocation.longitude}`);
     this.emitToUser(userId, 'ambulance.location', payload);
   }
 
@@ -144,9 +145,10 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private emitToUser(userId: string, event: string, data: any) {
     const socketId = this.userSockets.get(userId);
     if (!socketId) {
-      this.logger.debug(`User ${userId} not connected; cannot emit ${event}`);
+      this.logger.warn(`User ${userId} not connected; cannot emit ${event}`);
       return;
     }
+    this.logger.log(`[emitToUser] Emitting ${event} to user ${userId} (socket ${socketId})`);
     this.server.to(socketId).emit(event, data);
   }
 }
