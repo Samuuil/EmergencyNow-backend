@@ -52,20 +52,31 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // User is already authenticated by WsJwtGuard at this point
-    const user = (client as any).user;
-    if (!user || !user.id) {
-      this.logger.warn(`No user attached after guard; disconnecting.`);
+    // Manually verify JWT since guards don't run on handleConnection
+    const token = this.extractToken(client);
+    if (!token) {
+      this.logger.warn('No token provided; disconnecting.');
       client.disconnect(true);
       return;
     }
-    
-    // Store the driver connection
-    this.driverSockets.set(user.id, client.id);
-    this.socketDrivers.set(client.id, user.id);
-    this.logger.log(`Driver ${user.id} connected via WS (socket ${client.id})`);
-  }
 
+    try {
+      const payload: any = this.jwt.verify(token, {
+        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+      });
+
+      // Attach user to socket for downstream use
+      (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
+
+      // Store the driver connection
+      this.driverSockets.set(payload.sub, client.id);
+      this.socketDrivers.set(client.id, payload.sub);
+      this.logger.log(`Driver ${payload.sub} connected via WS (socket ${client.id})`);
+    } catch (e: any) {
+      this.logger.warn(`Invalid token; disconnecting: ${e.message}`);
+      client.disconnect(true);
+    }
+  }
 
   handleDisconnect(client: Socket) {
     const driverId = this.socketDrivers.get(client.id);
@@ -128,13 +139,18 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: { callId: string; latitude: number; longitude: number },
   ) {
     const driverId = this.socketDrivers.get(client.id);
-    if (!driverId) return;
+    this.logger.log(`[location.update] Received from socket ${client.id}, driverId=${driverId}, callId=${data?.callId}, lat=${data?.latitude}, lng=${data?.longitude}`);
+    if (!driverId) {
+      this.logger.warn(`[location.update] No driverId found for socket ${client.id}; ignoring`);
+      return;
+    }
     try {
       const call = await this.callsService.updateAmbulanceLocation(
         data.callId,
         data.latitude,
         data.longitude,
       );
+      this.logger.log(`[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`);
       if (call && call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
         this.emitToDriver(driverId, 'route.update', {
           callId: call.id,
@@ -220,6 +236,23 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   isDriverOnline(driverId: string): boolean {
     return this.driverSockets.has(driverId);
+  }
+
+  private extractToken(client: Socket): string | null {
+    const headers = (client as any)?.handshake?.headers || {};
+    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7);
+    }
+
+    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
+    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+
+    const tokenFromQuery = (client as any)?.handshake?.query?.token;
+    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery as string;
+
+    return null;
   }
 
   /**

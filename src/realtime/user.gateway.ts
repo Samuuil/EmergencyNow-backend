@@ -29,18 +29,30 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // User is already authenticated by WsJwtGuard at this point
-    const user = (client as any).user;
-    if (!user || !user.id) {
-      this.logger.warn(`No user attached after guard; disconnecting.`);
+    // Manually verify JWT since guards don't run on handleConnection
+    const token = this.extractToken(client);
+    if (!token) {
+      this.logger.warn('No token provided; disconnecting.');
       client.disconnect(true);
       return;
     }
 
-    // Store the user connection
-    this.userSockets.set(user.id, client.id);
-    this.socketUsers.set(client.id, user.id);
-    this.logger.log(`User ${user.id} connected to /users namespace (socket ${client.id})`);
+    try {
+      const payload: any = this.jwt.verify(token, {
+        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+      });
+
+      // Attach user to socket for downstream use
+      (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
+
+      // Store the user connection
+      this.userSockets.set(payload.sub, client.id);
+      this.socketUsers.set(client.id, payload.sub);
+      this.logger.log(`User ${payload.sub} connected to /users namespace (socket ${client.id})`);
+    } catch (e: any) {
+      this.logger.warn(`Invalid token; disconnecting: ${e.message}`);
+      client.disconnect(true);
+    }
   }
 
 
@@ -51,6 +63,23 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.socketUsers.delete(client.id);
       this.logger.log(`User ${userId} disconnected from /users namespace (socket ${client.id})`);
     }
+  }
+
+  private extractToken(client: Socket): string | null {
+    const headers = (client as any)?.handshake?.headers || {};
+    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7);
+    }
+
+    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
+    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+
+    const tokenFromQuery = (client as any)?.handshake?.query?.token;
+    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery as string;
+
+    return null;
   }
 
   /**
@@ -89,6 +118,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } | null;
     },
   ) {
+    this.logger.log(`[notifyLocationUpdate] Emitting ambulance.location to user ${userId}, callId=${payload.callId}, lat=${payload.ambulanceLocation.latitude}, lng=${payload.ambulanceLocation.longitude}`);
     this.emitToUser(userId, 'ambulance.location', payload);
   }
 
@@ -115,9 +145,10 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private emitToUser(userId: string, event: string, data: any) {
     const socketId = this.userSockets.get(userId);
     if (!socketId) {
-      this.logger.debug(`User ${userId} not connected; cannot emit ${event}`);
+      this.logger.warn(`User ${userId} not connected; cannot emit ${event}`);
       return;
     }
+    this.logger.log(`[emitToUser] Emitting ${event} to user ${userId} (socket ${socketId})`);
     this.server.to(socketId).emit(event, data);
   }
 }
