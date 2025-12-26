@@ -158,9 +158,6 @@ export class HospitalsService {
         );
       } catch (error) {
         this.logger.warn('Google distance matrix failed, using fallback distances', error.message);
-        // If Google distance matrix fails, fall back to returning hospitals
-        // without dropping them. Distances will remain Infinity and will be
-        // sorted to the end of the list.
         distances = hospitalLocations.map(() => ({ distance: Infinity, duration: Infinity }));
       }
 
@@ -205,7 +202,6 @@ export class HospitalsService {
           }
         } catch (error) {
           this.logger.warn(`Failed to sync hospital: ${place.name}`, error.message);
-          // Continue with next hospital
         }
       }
     } catch (error) {

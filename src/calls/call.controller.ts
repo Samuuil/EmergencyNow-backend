@@ -32,6 +32,16 @@ export class CallsController {
     return this.callsService.findAll(query);
   }
 
+  @Get('user/:userId')
+  @ApiOperation({ summary: 'Get all calls for a specific user' })
+  @ApiQuery({ type: BasePaginationDto })
+  findByUser(
+    @Param('userId') userId: string,
+    @Paginate() query: PaginateQuery,
+  ) {
+    return this.callsService.findByUser(userId, query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get call by ID' })
   findOne(@Param('id') id: string): Promise<Call> {

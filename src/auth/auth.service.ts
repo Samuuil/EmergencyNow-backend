@@ -52,7 +52,6 @@ export class AuthService {
   }
 
   async verifyCode(dto: VerifyCodeDto): Promise<{ accessToken: string; refreshToken: string }> {
-    // Verify and consume the code (automatically checks expiration and deletes)
     await this.verificationCodeService.verifyAndConsumeCode(dto.egn, dto.code);
 
     const stateArchive = await this.stateArchiveService.findByEgn(dto.egn);

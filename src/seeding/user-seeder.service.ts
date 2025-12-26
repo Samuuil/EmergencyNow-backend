@@ -15,7 +15,6 @@ export class UserSeederService {
   ) {}
 
   async seed(): Promise<User[]> {
-    // Get the seeded state archive entries
     const stateArchives = await this.stateArchiveRepository.find({
       where: [
         { egn: '1111111111' },
@@ -28,25 +27,23 @@ export class UserSeederService {
       throw new Error('State archive entries must be seeded first');
     }
 
-    // Sort by EGN to ensure consistent mapping
     stateArchives.sort((a, b) => a.egn.localeCompare(b.egn));
 
     const userData = [
       {
         role: Role.USER,
-        stateArchive: stateArchives[0], // EGN: 1111111111 - Boris Borisov
+        stateArchive: stateArchives[0],
       },
       {
         role: Role.DRIVER,
-        stateArchive: stateArchives[1], // EGN: 2222222222 - Stanislav Trifonov
+        stateArchive: stateArchives[1],
       },
       {
         role: Role.ADMIN,
-        stateArchive: stateArchives[2], // EGN: 3333333333 - Preslav Ivanov
+        stateArchive: stateArchives[2],
       },
     ];
 
-    // Check if users already exist
     const existingUsers = await this.userRepository.find({
       where: userData.map(data => ({ stateArchive: { id: data.stateArchive.id } })),
       relations: ['stateArchive'],

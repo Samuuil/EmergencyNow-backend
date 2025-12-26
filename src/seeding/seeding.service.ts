@@ -13,11 +13,9 @@ export class SeedingService {
     console.log('Starting database seeding...');
     
     try {
-      // First seed state archive entries
       console.log('Seeding state archive entries...');
       await this.stateArchiveSeederService.seed();
       
-      // Then seed users
       console.log('Seeding users...');
       await this.userSeederService.seed();
       
@@ -32,7 +30,6 @@ export class SeedingService {
     console.log('Clearing seed data...');
     
     try {
-      // Clear in reverse order (users first, then state archives)
       await this.userSeederService.clear();
       await this.stateArchiveSeederService.clear();
       
