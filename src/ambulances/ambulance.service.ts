@@ -462,7 +462,6 @@ export class AmbulancesService {
     const thresholdDate = new Date();
     thresholdDate.setHours(thresholdDate.getHours() - inactivityThresholdHours);
 
-    // Find all ambulances with drivers that haven't accepted calls recently
     const inactiveAmbulances = await this.ambulanceRepository
       .createQueryBuilder('ambulance')
       .where('ambulance.driverId IS NOT NULL')

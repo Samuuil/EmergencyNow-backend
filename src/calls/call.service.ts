@@ -77,21 +77,16 @@ export class CallsService {
     const call = await this.findOne(callId);
     if (call.status !== CallStatus.PENDING) return;
 
-    // Refresh locations from all available drivers before selecting the nearest
-    // Skip refresh if this is a retry after rejection (locations were just fetched)
     if (!skipLocationRefresh) {
       try {
         await this.driverGateway.refreshAvailableAmbulanceLocations(5000);
       } catch (error) {
         console.error('Failed to refresh ambulance locations:', error);
-        // Continue with potentially stale locations rather than failing the call
       }
     }
 
-    // Exclude already rejected ambulances
     const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
 
-    // Find nearest available ambulance not yet rejected and with an assigned driver
     let candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
       { latitude: call.latitude, longitude: call.longitude },
       excluded,
@@ -102,7 +97,6 @@ export class CallsService {
         !candidate.driverId || !this.driverGateway.isDriverOnline(candidate.driverId)
       )
     ) {
-      // no driver assigned or driver offline, skip this ambulance
       excluded.push(candidate.id);
       candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
         { latitude: call.latitude, longitude: call.longitude },
@@ -111,16 +105,11 @@ export class CallsService {
     }
 
     if (!candidate) {
-      // No available ambulances/drivers, keep call pending
       return;
     }
 
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
 
-    // Send lightweight offer with distance/duration.
-    // IMPORTANT: If Google routing fails (e.g. "No route available"), we must still
-    // send the offer so the driver sees the popup. In that case we fall back to
-    // distance/duration = 0.
     let distance = 0;
     let duration = 0;
     try {
@@ -131,7 +120,6 @@ export class CallsService {
       distance = res.distance;
       duration = res.duration;
     } catch (error) {
-      // Keep logging for debugging but do NOT stop the offer flow
       console.error('getDistanceAndDuration failed, sending offer without ETA:', error);
     }
 
@@ -150,24 +138,20 @@ export class CallsService {
   async handleDriverResponse(callId: string, driverId: string, accept: boolean): Promise<void> {
     const call = await this.findOne(callId);
 
-    // Validate driver corresponds to pending ambulance
     const ambulance = await this.ambulancesService.findByDriver(driverId);
-    if (!ambulance) return; // driver has no ambulance
+    if (!ambulance) return;
 
     const pendingAmbulanceId = this.driverGateway.getPendingAmbulanceId(callId);
     if (!pendingAmbulanceId || pendingAmbulanceId !== ambulance.id) {
-      return; // stale/invalid response
+      return;
     }
 
     if (!accept) {
-      // mark rejection and try next candidate
-      // Skip location refresh since we just did one for this call
       this.driverGateway.addRejection(callId, ambulance.id);
       await this.proposeToNearestDriver(callId, true);
       return;
     }
 
-    // Accept: assign ambulance, compute route, update status, notify driver
     const route = await this.googleMapsService.getRoute(
       { latitude: ambulance.latitude!, longitude: ambulance.longitude! },
       { latitude: call.latitude, longitude: call.longitude },
@@ -198,7 +182,6 @@ export class CallsService {
       },
     });
 
-    // Notify user that ambulance has been dispatched with route info
     if (call.user?.id) {
       this.userGateway.notifyCallDispatched(call.user.id, {
         callId: call.id,
@@ -237,13 +220,8 @@ export class CallsService {
     call.ambulanceCurrentLatitude = latitude;
     call.ambulanceCurrentLongitude = longitude;
 
-    // Do not recalculate route on every location update to save Google Maps API usage.
-    // We keep using the route computed at dispatch time; only the current ambulance
-    // position is updated here.
-
     const savedCall = await this.callsRepository.save(call);
 
-    // Notify user of ambulance location update with fresh route
     if (call.user?.id) {
       this.userGateway.notifyLocationUpdate(call.user.id, {
         callId: call.id,
@@ -284,7 +262,6 @@ export class CallsService {
 
     const savedCall = await this.callsRepository.save(call);
 
-    // Notify user of status change
     if (call.user?.id) {
       this.userGateway.notifyStatusChange(call.user.id, {
         callId: call.id,
@@ -354,6 +331,25 @@ export class CallsService {
     });
   }
 
+  findByUser(userId: string, query: PaginateQuery) {
+    const qb = this.callsRepository
+      .createQueryBuilder('call')
+      .leftJoinAndSelect('call.user', 'user')
+      .leftJoinAndSelect('call.ambulance', 'ambulance')
+      .where('user.id = :userId', { userId });
+
+    return paginate(query, qb, {
+      sortableColumns: ['status', 'createdAt'],
+      defaultSortBy: [['createdAt', 'DESC']],
+      searchableColumns: ['description'],
+      filterableColumns: {
+        status: [FilterOperator.EQ],
+      },
+      defaultLimit: 10,
+      maxLimit: 100,
+    });
+  }
+
   async findOne(id: string): Promise<Call> {
     const call = await this.callsRepository.findOne({
       where: { id },
@@ -383,10 +379,7 @@ export class CallsService {
     await this.callsRepository.remove(call);
   }
 
-  /**
-   * Get all hospitals sorted by distance from the driver's current location.
-   * Should be called when driver marks call as ARRIVED.
-   */
+
   async getHospitalsForCall(
     callId: string,
     driverLatitude: number,
@@ -400,13 +393,10 @@ export class CallsService {
 
     return this.hospitalsService.findNearestHospitals(
       { latitude: driverLatitude, longitude: driverLongitude },
-      50, // return up to 50 hospitals
+      50,
     );
   }
 
-  /**
-   * Select a hospital for the call and compute route from driver's current location.
-   */
   async selectHospitalForCall(
     callId: string,
     hospitalId: string,
@@ -421,7 +411,6 @@ export class CallsService {
 
     const hospital = await this.hospitalsService.findOne(hospitalId);
 
-    // Compute route from driver's current location to hospital
     const route = await this.googleMapsService.getRoute(
       { latitude: driverLatitude, longitude: driverLongitude },
       { latitude: hospital.latitude, longitude: hospital.longitude },
@@ -434,13 +423,11 @@ export class CallsService {
     call.hospitalRouteDuration = route.duration;
     call.hospitalRouteSteps = route.steps;
 
-    // Update ambulance current location
     call.ambulanceCurrentLatitude = driverLatitude;
     call.ambulanceCurrentLongitude = driverLongitude;
 
     const savedCall = await this.callsRepository.save(call);
 
-    // Notify emergency contacts about hospital selection (async, don't block)
     this.notifyEmergencyContactsAboutHospital(call, hospital.name, route.duration).catch((err) =>
       console.error('Failed to notify emergency contacts about hospital:', err),
     );
@@ -448,9 +435,6 @@ export class CallsService {
     return savedCall;
   }
 
-  /**
-   * Get hospital route data for a call (for tracking the ambulance going to hospital).
-   */
   async getHospitalRouteData(callId: string): Promise<{
     hospital: { id: string; name: string } | null;
     route: {
@@ -482,10 +466,6 @@ export class CallsService {
     };
   }
 
-  /**
-   * Notify all emergency contacts about a new emergency call.
-   * Sends emails to contacts with email addresses.
-   */
   private async notifyEmergencyContactsAboutCall(user: User, call: Call): Promise<void> {
     const contacts = await this.contactsService.getUserContactsList(user.id);
 
@@ -494,7 +474,6 @@ export class CallsService {
       return;
     }
 
-    // Load user's stateArchive to get their name
     const fullUser = await this.userRepository.findOne({
       where: { id: user.id },
       relations: ['stateArchive'],
@@ -521,9 +500,6 @@ export class CallsService {
     );
   }
 
-  /**
-   * Notify all emergency contacts about which hospital the ambulance is heading to.
-   */
   private async notifyEmergencyContactsAboutHospital(
     call: Call,
     hospitalName: string,
@@ -541,7 +517,6 @@ export class CallsService {
       return;
     }
 
-    // Load user's stateArchive to get their name
     const fullUser = await this.userRepository.findOne({
       where: { id: call.user.id },
       relations: ['stateArchive'],

@@ -23,15 +23,11 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(DriverGateway.name);
 
-  // driverId -> socketId
   private driverSockets = new Map<string, string>();
-  // socketId -> driverId
   private socketDrivers = new Map<string, string>();
 
-  // callId -> { ambulanceId, rejectedAmbulanceIds }
   private callOffers = new Map<string, { ambulanceId: string; rejectedAmbulanceIds: Set<string> }>();
 
-  // For on-demand location collection
   private locationRequestId = 0;
   private pendingLocationRequests = new Map<
     number,
@@ -52,7 +48,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // Manually verify JWT since guards don't run on handleConnection
     const token = this.extractToken(client);
     if (!token) {
       this.logger.warn('No token provided; disconnecting.');
@@ -65,10 +60,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
 
-      // Attach user to socket for downstream use
       (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
 
-      // Store the driver connection
       this.driverSockets.set(payload.sub, client.id);
       this.socketDrivers.set(client.id, payload.sub);
       this.logger.log(`Driver ${payload.sub} connected via WS (socket ${client.id})`);
@@ -87,7 +80,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Driver responds to an offer
   @SubscribeMessage('call.respond')
   async onDriverRespond(
     @ConnectedSocket() client: Socket,
@@ -99,7 +91,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.callsService.handleDriverResponse(data.callId, driverId, data.accept);
   }
 
-  // Driver responds to location request (on-demand refresh)
   @SubscribeMessage('location.response')
   async onLocationResponse(
     @ConnectedSocket() client: Socket,
@@ -110,12 +101,11 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!driverId) return;
 
     const pending = this.pendingLocationRequests.get(data.requestId);
-    if (!pending) return; // expired or unknown request
+    if (!pending) return;
 
     const ambulanceId = pending.driverIdToAmbulanceId.get(driverId);
-    if (!ambulanceId) return; // driver not part of this request
+    if (!ambulanceId) return;
 
-    // Avoid duplicates
     if (!pending.collected.some((c) => c.ambulanceId === ambulanceId)) {
       pending.collected.push({
         ambulanceId,
@@ -131,7 +121,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Driver sends location updates (during active call)
   @SubscribeMessage('location.update')
   async onLocationUpdate(
     @ConnectedSocket() client: Socket,
@@ -167,7 +156,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Offer a call to a driver's ambulance
   offerCall(params: {
     callId: string;
     description: string;
@@ -179,7 +167,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     duration: number;
   }) {
     const { driverId, callId, ambulanceId } = params;
-    // register mapping
     const existing = this.callOffers.get(callId);
     const rejected = existing?.rejectedAmbulanceIds ?? new Set<string>();
     this.callOffers.set(callId, { ambulanceId, rejectedAmbulanceIds: rejected });
@@ -255,14 +242,9 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return null;
   }
 
-  /**
-   * Request fresh locations from all online drivers whose ambulances are available.
-   * Waits up to `timeoutMs` for responses, then updates the database.
-   */
   async refreshAvailableAmbulanceLocations(timeoutMs = 5000): Promise<void> {
     const driverIdToAmbulanceId = await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
-    // Filter to only drivers that are currently online
     const onlineDriverIds = Array.from(driverIdToAmbulanceId.keys()).filter((dId: string) =>
       this.driverSockets.has(dId),
     );
@@ -274,7 +256,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const requestId = ++this.locationRequestId;
 
-    // Create a promise that resolves when timeout or all responses collected
     const collectedLocations = await new Promise<
       Array<{ ambulanceId: string; latitude: number; longitude: number }>
     >((resolve) => {
@@ -285,12 +266,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       };
       this.pendingLocationRequests.set(requestId, pendingEntry);
 
-      // Emit location.request to each online driver
       for (const driverId of onlineDriverIds) {
         this.emitToDriver(driverId as string, 'location.request', { requestId });
       }
 
-      // Resolve after timeout (or we could resolve early if all respond, but timeout is simpler)
       setTimeout(() => {
         const entry = this.pendingLocationRequests.get(requestId);
         this.pendingLocationRequests.delete(requestId);

@@ -18,9 +18,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(UserGateway.name);
 
-  // userId -> socketId
   private userSockets = new Map<string, string>();
-  // socketId -> userId
   private socketUsers = new Map<string, string>();
 
   constructor(
@@ -29,7 +27,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   handleConnection(client: Socket) {
-    // Manually verify JWT since guards don't run on handleConnection
     const token = this.extractToken(client);
     if (!token) {
       this.logger.warn('No token provided; disconnecting.');
@@ -42,10 +39,8 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
 
-      // Attach user to socket for downstream use
       (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
 
-      // Store the user connection
       this.userSockets.set(payload.sub, client.id);
       this.socketUsers.set(client.id, payload.sub);
       this.logger.log(`User ${payload.sub} connected to /users namespace (socket ${client.id})`);
@@ -82,9 +77,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return null;
   }
 
-  /**
-   * Notify user that their call has been dispatched with initial route info
-   */
   notifyCallDispatched(
     userId: string,
     payload: {
@@ -102,9 +94,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'call.dispatched', payload);
   }
 
-  /**
-   * Notify user of ambulance location update with fresh route
-   */
   notifyLocationUpdate(
     userId: string,
     payload: {
@@ -122,9 +111,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'ambulance.location', payload);
   }
 
-  /**
-   * Notify user of call status change
-   */
   notifyStatusChange(
     userId: string,
     payload: {
@@ -135,9 +121,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'call.status', payload);
   }
 
-  /**
-   * Check if user is currently connected
-   */
   isUserOnline(userId: string): boolean {
     return this.userSockets.has(userId);
   }
