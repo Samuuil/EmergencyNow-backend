@@ -10,12 +10,16 @@ import { Call } from './entities/call.entity';
 import { User } from '../users/entities/user.entity';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 
 @ApiTags('Calls')
 @ApiBearerAuth('AccessToken')
 @Controller('calls')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.DRIVER)
 export class CallsController {
   constructor(private readonly callsService: CallsService) {}
 
