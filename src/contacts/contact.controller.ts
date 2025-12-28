@@ -28,7 +28,6 @@ import {
   export class ContactsController {
     constructor(private readonly contactsService: ContactsService) {}
 
-    // User routes: authenticated users can manage their own contacts
     @Get('me')
     @ApiOperation({ summary: 'Get my contacts' })
     @ApiQuery({ type: BasePaginationDto })

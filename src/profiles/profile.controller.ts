@@ -37,7 +37,6 @@ export class ProfilesController {
     return this.profilesService.findAll(query);
   }
 
-  // Authenticated user endpoints - Must come before :id routes
   @UseGuards(JwtAuthGuard)
   @Get('me')
   @ApiOperation({ summary: 'Get my profile' })
@@ -77,6 +76,15 @@ export class ProfilesController {
   @ApiOperation({ summary: 'Get profile by ID' })
   findOne(@Param('id') id: string): Promise<Profile> {
     return this.profilesService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('by-egn/:egn')
+  @Roles(Role.ADMIN, Role.DOCTOR)
+  @ApiBearerAuth('AccessToken')
+  @ApiOperation({ summary: 'Get profile by EGN (for doctors)' })
+  getProfileByEgn(@Param('egn') egn: string, @CurrentUser() user: any): Promise<Profile> {
+    return this.profilesService.getProfileByEgn(egn);
   }
 
   @Patch(':id')

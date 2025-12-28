@@ -128,15 +128,12 @@ export class ProfilesService {
       }
 
       if (user.profile) {
-        // Update existing profile
         await this.profileRepository.update(user.profile.id, dto);
         return await this.findOne(user.profile.id);
       } else {
-        // Create new profile
         const profile = this.profileRepository.create(dto);
         const savedProfile = await this.profileRepository.save(profile);
         
-        // Link profile to user
         user.profile = savedProfile;
         await this.userRepository.save(user);
         
@@ -181,6 +178,42 @@ export class ProfilesService {
         throw error;
       }
       this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: ProfileErrorCode.DATABASE_ERROR,
+        message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
+
+  async getProfileByEgn(egn: string): Promise<Profile> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { 
+          stateArchive: { egn } 
+        },
+        relations: ['profile', 'stateArchive'],
+      });
+
+      if (!user) {
+        throw new NotFoundException({
+          code: ProfileErrorCode.USER_NOT_FOUND,
+          message: 'User with this EGN not found',
+        });
+      }
+
+      if (!user.profile) {
+        throw new NotFoundException({
+          code: ProfileErrorCode.PROFILE_NOT_FOUND,
+          message: 'Profile not found for this user',
+        });
+      }
+
+      return user.profile;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Failed to get profile by EGN: ${error.message}`, error.stack);
       throw new InternalServerErrorException({
         code: ProfileErrorCode.DATABASE_ERROR,
         message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],
