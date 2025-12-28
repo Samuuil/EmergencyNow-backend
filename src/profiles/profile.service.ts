@@ -35,11 +35,12 @@ export class ProfilesService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.profileRepository, {
-        sortableColumns: ['id', 'height', 'weight', 'gender'],
+        sortableColumns: ['id', 'height', 'weight', 'gender', 'dateOfBirth', 'bloodType'],
         defaultSortBy: [['id', 'ASC']],
         searchableColumns: [],
         filterableColumns: {
           gender: [FilterOperator.EQ],
+          bloodType: [FilterOperator.EQ],
         },
         defaultLimit: 10,
         maxLimit: 100,
