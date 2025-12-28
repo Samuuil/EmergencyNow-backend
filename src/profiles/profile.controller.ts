@@ -8,7 +8,10 @@ import { CreateProfileDto } from './dto/createProfile.dto';
 import { UpdateProfileDto } from './dto/updateProfile.dto';
 import { Profile } from './entities/profile.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 
 @ApiTags('Profiles')
 @Controller('profiles')
@@ -16,37 +19,25 @@ export class ProfilesController {
   constructor(private readonly profilesService: ProfilesService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('AccessToken')
   @ApiOperation({ summary: 'Create a new profile' })
   create(@Body() dto: CreateProfileDto): Promise<Profile> {
     return this.profilesService.create(dto);
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.DOCTOR)
+  @ApiBearerAuth('AccessToken')
   @ApiOperation({ summary: 'Get all profiles' })
   @ApiQuery({ type: BasePaginationDto })
   findAll(@Paginate() query: PaginateQuery) {
     return this.profilesService.findAll(query);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get profile by ID' })
-  findOne(@Param('id') id: string): Promise<Profile> {
-    return this.profilesService.findOne(id);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update profile' })
-  update(@Param('id') id: string, @Body() dto: UpdateProfileDto): Promise<Profile> {
-    return this.profilesService.update(id, dto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete profile' })
-  remove(@Param('id') id: string): Promise<{ message: string }> {
-    return this.profilesService.remove(id).then(() => ({ message: 'Profile deleted successfully' }));
-  }
-
-  // Authenticated user endpoints
+  // Authenticated user endpoints - Must come before :id routes
   @UseGuards(JwtAuthGuard)
   @Get('me')
   @ApiOperation({ summary: 'Get my profile' })
@@ -77,5 +68,32 @@ export class ProfilesController {
   @ApiBearerAuth('AccessToken')
   patchMyProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto): Promise<Profile> {
     return this.profilesService.createOrUpdateForUser(user.id, dto);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.DOCTOR)
+  @ApiBearerAuth('AccessToken')
+  @ApiOperation({ summary: 'Get profile by ID' })
+  findOne(@Param('id') id: string): Promise<Profile> {
+    return this.profilesService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('AccessToken')
+  @ApiOperation({ summary: 'Update profile' })
+  update(@Param('id') id: string, @Body() dto: UpdateProfileDto): Promise<Profile> {
+    return this.profilesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('AccessToken')
+  @ApiOperation({ summary: 'Delete profile' })
+  remove(@Param('id') id: string): Promise<{ message: string }> {
+    return this.profilesService.remove(id).then(() => ({ message: 'Profile deleted successfully' }));
   }
 }
