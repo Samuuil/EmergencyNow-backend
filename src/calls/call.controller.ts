@@ -36,6 +36,13 @@ export class CallsController {
     return this.callsService.findAll(query);
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Get all calls for the authenticated user' })
+  @ApiQuery({ type: BasePaginationDto })
+  findMyCalls(@CurrentUser() user: User, @Paginate() query: PaginateQuery,) {
+    return this.callsService.findByUser(user.id, query);
+  }
+
   @Get('user/:userId')
   @Roles(Role.ADMIN, Role.DRIVER)
   @ApiOperation({ summary: 'Get all calls for a specific user' })
