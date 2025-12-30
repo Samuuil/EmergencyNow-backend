@@ -43,6 +43,19 @@ export class UsersController {
       return await this.usersService.findAll(query);
     }
 
+    @Get('user-role/:id')
+    @ApiOperation({ summary: 'Get user role by user ID' })
+    async findRole(@Param('id') id: string): Promise<String> {
+      return await this.usersService.findUserRole(id);
+    }
+
+    @Get(':id/egn')
+    @Roles(Role.ADMIN, Role.DRIVER, Role.DOCTOR)
+    @ApiOperation({ summary: 'Get user EGN by user ID' })
+    async findEgn(@Param('id') id: string): Promise<{ egn: string }> {
+      return await this.usersService.findUserEgn(id);
+    }
+
     @Get(':id')
     @Roles(Role.ADMIN, Role.DRIVER, Role.DOCTOR)
     @ApiOperation({ summary: 'Get user by ID' })
@@ -66,12 +79,6 @@ export class UsersController {
     async remove(@Param('id') id: string): Promise<{ message: string }> {
       await this.usersService.remove(id);
       return { message: 'User deleted successfully' };
-    }
-
-    @Get('user-role/:id')
-    @ApiOperation({ summary: 'Get user role by user ID' })
-    async findRole(@Param('id') id: string): Promise<String> {
-      return await this.usersService.findUserRole(id);
     }
 
   }

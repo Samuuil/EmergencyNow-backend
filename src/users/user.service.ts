@@ -175,4 +175,38 @@ export class UsersService {
       });
     }
   }
+
+  async findUserEgn(userId: string): Promise<{ egn: string }> {
+    try {
+      const user = await this.usersRepository.findOne({
+        where: { id: userId },
+        relations: ['stateArchive'],
+      });
+      
+      if (!user) {
+        throw new NotFoundException({
+          code: UserErrorCode.USER_NOT_FOUND,
+          message: UserErrorMessages[UserErrorCode.USER_NOT_FOUND],
+        });
+      }
+
+      if (!user.stateArchive || !user.stateArchive.egn) {
+        throw new NotFoundException({
+          code: UserErrorCode.USER_NOT_FOUND,
+          message: 'EGN not found for this user',
+        });
+      }
+
+      return { egn: user.stateArchive.egn };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException({
+        code: UserErrorCode.DATABASE_ERROR,
+        message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
 }
