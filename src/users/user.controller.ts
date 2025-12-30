@@ -15,11 +15,12 @@ import {
   import { UsersService } from './user.service';
   import { CreateUserDto } from './dto/createUser.dto';
   import { UpdateUserDto } from './dto/updateUser.dto';
-  import { RolesGuard } from '../auth/guards/roles.guard';
-  import { Roles } from '../auth/decorators/roles.decorator';
-  import { Role } from '../common/enums/role.enum';
-  import { User } from './entities/user.entity';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
+import { User } from './entities/user.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Users')
 @Controller('users')
@@ -47,6 +48,12 @@ export class UsersController {
     @ApiOperation({ summary: 'Get user role by user ID' })
     async findRole(@Param('id') id: string): Promise<String> {
       return await this.usersService.findUserRole(id);
+    }
+
+    @Get('me/egn')
+    @ApiOperation({ summary: 'Get my EGN' })
+    async findMyEgn(@CurrentUser() user: User): Promise<{ egn: string }> {
+      return await this.usersService.findUserEgn(user.id);
     }
 
     @Get(':id/egn')
