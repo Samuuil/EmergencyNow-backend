@@ -80,7 +80,7 @@ export class ProfilesController {
 
   @UseGuards(JwtAuthGuard)
   @Get('by-egn/:egn')
-  @Roles(Role.ADMIN, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.DOCTOR, Role.DRIVER)
   @ApiBearerAuth('AccessToken')
   @ApiOperation({ summary: 'Get profile by EGN (for doctors)' })
   getProfileByEgn(@Param('egn') egn: string, @CurrentUser() user: any): Promise<Profile> {

@@ -64,7 +64,6 @@ export class CallsService {
   }
 
   async dispatchNearestAmbulance(callId: string): Promise<Call> {
-    // For backward compatibility with the controller route: trigger offer flow
     const call = await this.findOne(callId);
     if (call.status === CallStatus.COMPLETED || call.status === CallStatus.CANCELLED) {
       throw new BadRequestException('Call is already completed or cancelled');
@@ -74,8 +73,12 @@ export class CallsService {
   }
 
   private async proposeToNearestDriver(callId: string, skipLocationRefresh = false): Promise<void> {
-    const call = await this.findOne(callId);
-    if (call.status !== CallStatus.PENDING) return;
+    const call = await this.callsRepository.findOne({
+      where: { id: callId },
+      relations: ['user', 'user.stateArchive', 'ambulance'],
+    });
+    
+    if (!call) return;
 
     if (!skipLocationRefresh) {
       try {
@@ -86,6 +89,24 @@ export class CallsService {
     }
 
     const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
+
+    if (call.user?.stateArchive?.egn) {
+      const callerEgn = call.user.stateArchive.egn;
+      
+      const ambulancesWithMatchingDriverEgn = await this.ambulanceRepository
+        .createQueryBuilder('ambulance')
+        .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
+        .innerJoin('driver.stateArchive', 'stateArchive')
+        .where('ambulance.available = :available', { available: true })
+        .andWhere('ambulance.driverId IS NOT NULL')
+        .andWhere('stateArchive.egn = :callerEgn', { callerEgn })
+        .select('ambulance.id')
+        .getMany();
+
+      ambulancesWithMatchingDriverEgn.forEach((amb) => {
+        excluded.push(amb.id);
+      });
+    }
 
     let candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
       { latitude: call.latitude, longitude: call.longitude },
