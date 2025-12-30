@@ -44,6 +44,7 @@ export class CallsService {
       latitude: dto.latitude,
       longitude: dto.longitude,
       user,
+      userEgn: dto.userEgn,
       status: CallStatus.PENDING,
     });
 

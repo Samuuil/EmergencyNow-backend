@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsNotEmpty } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateCallDto {
@@ -15,8 +15,8 @@ export class CreateCallDto {
   @IsNumber()
   longitude: number;
 
-  @ApiPropertyOptional({ description: 'Patient EGN', example: '1234567890' })
-  @IsOptional()
+  @ApiProperty({ description: 'User EGN', example: '1234567890' })
+  @IsNotEmpty()
   @IsString()
-  patientEgn?: string;
+  userEgn: string;
 }

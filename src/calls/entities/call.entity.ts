@@ -21,6 +21,9 @@ export class Call {
   @JoinColumn()
   user: User;
 
+  @Column()
+  userEgn: string;
+
   @ManyToOne(() => Ambulance, { nullable: true })
   @JoinColumn()
   ambulance: Ambulance;
