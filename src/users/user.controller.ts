@@ -44,8 +44,8 @@ export class UsersController {
     }
 
     @Get(':id')
-    @Roles(Role.ADMIN)
-    @ApiOperation({ summary: 'Get user by ID (Admin only)' })
+    @Roles(Role.ADMIN, Role.DRIVER, Role.DOCTOR)
+    @ApiOperation({ summary: 'Get user by ID' })
     async findOne(@Param('id') id: string): Promise<User> {
       return await this.usersService.findOne(id);
     }
