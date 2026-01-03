@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, InternalServerErrorException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { StateArchive } from './entities/state-archive.entity';
 import { CreateStateArchiveDto } from './dto/create-state-archive.dto';
@@ -14,6 +17,8 @@ export class StateArchiveService {
   constructor(
     @InjectRepository(StateArchive)
     private readonly archiveRepo: Repository<StateArchive>,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createDto: CreateStateArchiveDto): Promise<StateArchive> {
@@ -129,8 +134,64 @@ export class StateArchiveService {
 
   async findByEgn(egn: string): Promise<StateArchive | null> {
     try {
-      return await this.archiveRepo.findOne({ where: { egn } });
+      // First check local database (for users of this app)
+      let archive = await this.archiveRepo.findOne({ where: { egn } });
+      
+      if (archive) {
+        return archive;
+      }
+
+      // If not found locally, fetch from external API
+      const stateArchiveUrl = this.configService.get<string>('STATE_ARCHIVE_URL');
+      if (!stateArchiveUrl) {
+        this.logger.error('STATE_ARCHIVE_URL is not configured');
+        throw new InternalServerErrorException({
+          code: StateArchiveErrorCode.DATABASE_ERROR,
+          message: 'State archive URL is not configured',
+        });
+      }
+
+      try {
+        const url = `${stateArchiveUrl}/state-archive-mock/egn/${egn}`;
+        this.logger.log(`Fetching state archive data from external API: ${url}`);
+        
+        const response = await firstValueFrom(
+          this.httpService.get(url)
+        );
+
+        const externalData = response.data;
+        
+        if (!externalData) {
+          return null;
+        }
+
+        // Save to local database for future use
+        archive = this.archiveRepo.create({
+          egn: externalData.egn,
+          fullName: externalData.fullName,
+          email: externalData.email,
+          phoneNumber: externalData.phoneNumber,
+        });
+
+        archive = await this.archiveRepo.save(archive);
+        this.logger.log(`Saved state archive data for EGN: ${egn}`);
+        
+        return archive;
+      } catch (httpError) {
+        if (httpError.response?.status === 404) {
+          this.logger.warn(`State archive not found for EGN: ${egn}`);
+          return null;
+        }
+        this.logger.error(`Failed to fetch from external API: ${httpError.message}`, httpError.stack);
+        throw new InternalServerErrorException({
+          code: StateArchiveErrorCode.DATABASE_ERROR,
+          message: 'Failed to fetch state archive data from external API',
+        });
+      }
     } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
       this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.DATABASE_ERROR,

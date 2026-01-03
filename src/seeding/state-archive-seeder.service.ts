@@ -20,7 +20,7 @@ export class StateArchiveSeederService {
       },
       {
         egn: '2222222222',
-        fullName: 'Stanislav Trifonov',
+        fullName: 'Stanislav Todorov',
         email: process.env.SEED_USER2_EMAIL || 'stanislav.trifonov@example.com',
         phoneNumber: process.env.SEED_USER2_PHONE || '+359888222222',
       },
@@ -29,6 +29,12 @@ export class StateArchiveSeederService {
         fullName: 'Preslav Ivanov',
         email: process.env.SEED_USER3_EMAIL || 'preslav.ivanov@example.com',
         phoneNumber: process.env.SEED_USER3_PHONE || '+359888333333',
+      },
+      {
+        egn: '4444444444',
+        fullName: 'Dimitar Petrov',
+        email: process.env.SEED_USER4_EMAIL || 'dimitar.petrov@example.com',
+        phoneNumber: process.env.SEED_USER4_PHONE || '+359888333333',
       },
     ];
 
@@ -51,7 +57,7 @@ export class StateArchiveSeederService {
   }
 
   async clear(): Promise<void> {
-    const seedEgns = ['1111111111', '2222222222', '3333333333'];
+    const seedEgns = ['1111111111', '2222222222', '3333333333', '4444444444'];
     await this.stateArchiveRepository.delete(seedEgns.map(egn => ({ egn })));
     console.log('Cleared state archive seed data');
   }
