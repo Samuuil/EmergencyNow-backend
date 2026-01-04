@@ -8,8 +8,8 @@ export interface Location {
 }
 
 export interface RouteInfo {
-  distance: number; // in meters
-  duration: number; // in seconds
+  distance: number;
+  duration: number;
   polyline: string;
   steps: Array<{
     distance: number;
@@ -21,8 +21,8 @@ export interface RouteInfo {
 }
 
 export interface DistanceMatrixResult {
-  distance: number; // in meters
-  duration: number; // in seconds
+  distance: number;
+  duration: number;
 }
 
 @Injectable()
@@ -261,73 +261,6 @@ export class GoogleMapsService {
     }
   }
 
-  async findNearbyPlaces(
-    location: Location,
-    type: string,
-    radius: number = 5000,
-  ): Promise<
-    Array<{
-      name: string;
-      address: string;
-      location: { lat: number; lng: number };
-      placeId: string;
-    }>
-  > {
-    try {
-      const url = 'https://places.googleapis.com/v1/places:searchNearby';
-      
-      const requestBody = {
-        includedTypes: [type],
-        maxResultCount: 20,
-        locationRestriction: {
-          circle: {
-            center: {
-              latitude: location.latitude,
-              longitude: location.longitude,
-            },
-            radius: radius,
-          },
-        },
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': this.apiKey,
-          'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.id',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Places API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.places || data.places.length === 0) {
-        this.logger.warn('No places found in the specified area');
-        return [];
-      }
-
-      return data.places.map((place: any) => ({
-        name: place.displayName?.text || 'Unknown',
-        address: place.formattedAddress || '',
-        location: {
-          lat: place.location?.latitude || 0,
-          lng: place.location?.longitude || 0,
-        },
-        placeId: place.id || '',
-      }));
-    } catch (error) {
-      this.logger.error(`Error finding nearby places: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-
   async findHospitalsByTextSearch(
     location: Location,
     radius: number = 10000,
@@ -342,7 +275,6 @@ export class GoogleMapsService {
     try {
       const url = 'https://places.googleapis.com/v1/places:searchText';
 
-      // Calculate approximate degrees for radius (rough approximation: 1 degree ≈ 111km)
       const latOffset = (radius / 111000);
       const lngOffset = (radius / (111000 * Math.cos(location.latitude * Math.PI / 180)));
 

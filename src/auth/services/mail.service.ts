@@ -32,9 +32,6 @@ export class MailService {
     });
   }
 
-  /**
-   * Send emergency alert to a contact when a call is created
-   */
   async sendEmergencyAlert(
     contactEmail: string,
     contactName: string,
@@ -88,13 +85,9 @@ export class MailService {
       this.logger.log(`Emergency alert sent successfully to ${contactEmail}: ${info.messageId}`);
     } catch (error) {
       this.logger.error(`Failed to send emergency alert to ${contactEmail}: ${error.message}`, error.stack);
-      // Don't throw - we don't want email failures to block the emergency flow
     }
   }
 
-  /**
-   * Send hospital update to a contact when hospital is selected
-   */
   async sendHospitalUpdate(
     contactEmail: string,
     contactName: string,
@@ -145,7 +138,6 @@ export class MailService {
       this.logger.log(`Hospital update sent successfully to ${contactEmail}: ${info.messageId}`);
     } catch (error) {
       this.logger.error(`Failed to send hospital update to ${contactEmail}: ${error.message}`, error.stack);
-      // Don't throw - we don't want email failures to block the flow
     }
   }
 

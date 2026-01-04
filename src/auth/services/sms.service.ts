@@ -8,7 +8,6 @@ export class SmsService {
   constructor(private configService: ConfigService) {}
 
   async sendVerificationCode(phoneNumber: string, code: string, fullName: string): Promise<void> {
-    // TODO: Integrate with SMS provider
     this.logger.log(`SMS to ${phoneNumber}: Your EmergencyNow verification code is: ${code}`);
 
   }

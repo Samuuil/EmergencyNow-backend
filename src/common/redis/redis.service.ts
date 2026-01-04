@@ -31,44 +31,26 @@ export class RedisService implements OnModuleDestroy {
     await this.client.quit();
   }
 
-  /**
-   * Set a key with expiration in seconds
-   */
   async setex(key: string, seconds: number, value: string): Promise<void> {
     await this.client.setex(key, seconds, value);
   }
 
-  /**
-   * Get a value by key
-   */
   async get(key: string): Promise<string | null> {
     return await this.client.get(key);
   }
 
-  /**
-   * Get and delete a key atomically (for one-time use codes)
-   */
   async getdel(key: string): Promise<string | null> {
     return await this.client.getdel(key);
   }
 
-  /**
-   * Delete a key
-   */
   async del(key: string): Promise<number> {
     return await this.client.del(key);
   }
 
-  /**
-   * Check if a key exists
-   */
   async exists(key: string): Promise<number> {
     return await this.client.exists(key);
   }
 
-  /**
-   * Get remaining TTL in seconds
-   */
   async ttl(key: string): Promise<number> {
     return await this.client.ttl(key);
   }

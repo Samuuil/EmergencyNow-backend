@@ -134,14 +134,12 @@ export class StateArchiveService {
 
   async findByEgn(egn: string): Promise<StateArchive | null> {
     try {
-      // First check local database (for users of this app)
       let archive = await this.archiveRepo.findOne({ where: { egn } });
       
       if (archive) {
         return archive;
       }
 
-      // If not found locally, fetch from external API
       const stateArchiveUrl = this.configService.get<string>('STATE_ARCHIVE_URL');
       if (!stateArchiveUrl) {
         this.logger.error('STATE_ARCHIVE_URL is not configured');
@@ -165,7 +163,6 @@ export class StateArchiveService {
           return null;
         }
 
-        // Save to local database for future use
         archive = this.archiveRepo.create({
           egn: externalData.egn,
           fullName: externalData.fullName,

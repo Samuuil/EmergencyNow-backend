@@ -404,7 +404,7 @@ export class AmbulancesService {
       }
 
       ambulance.driverId = driverId;
-      ambulance.lastCallAcceptedAt = new Date(); // Initialize activity timestamp
+      ambulance.lastCallAcceptedAt = new Date();
       return await this.ambulanceRepository.save(ambulance);
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {

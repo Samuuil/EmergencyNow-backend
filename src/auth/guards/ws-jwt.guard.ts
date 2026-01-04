@@ -21,7 +21,6 @@ export class WsJwtGuard implements CanActivate {
       const payload = this.jwt.verify(token, {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
-      // Attach a lightweight user object on the socket for downstream use
       client.user = { id: payload.sub, role: payload.role, egn: payload.egn };
       this.logger.log(`WS Auth success: User ${payload.sub} authenticated`);
       return true;

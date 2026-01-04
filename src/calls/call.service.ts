@@ -56,7 +56,6 @@ export class CallsService {
       console.error('Failed to propose call to driver:', error);
     }
 
-    // Notify emergency contacts about the call (async, don't block)
     this.notifyEmergencyContactsAboutCall(user, savedCall).catch((err) =>
       console.error('Failed to notify emergency contacts:', err),
     );

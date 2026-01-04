@@ -71,7 +71,6 @@ export class Call {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  // Hospital selection (after driver arrives at patient location)
   @Column({ nullable: true })
   selectedHospitalId: string;
 

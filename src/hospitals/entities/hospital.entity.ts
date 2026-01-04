@@ -21,7 +21,7 @@ export class Hospital {
   phoneNumber: string;
 
   @Column({ nullable: true })
-  placeId: string; // Google Places ID
+  placeId: string;
 
   @Column({ default: true })
   isActive: boolean;
