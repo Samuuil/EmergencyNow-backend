@@ -8,10 +8,6 @@ export class DriverInactivityService {
 
   constructor(private readonly ambulancesService: AmbulancesService) {}
 
-  /**
-   * Runs every hour to check for inactive drivers
-   * Drivers who haven't accepted a call in 5 hours will be removed from their ambulances
-   */
   @Cron(CronExpression.EVERY_HOUR)
   async checkInactiveDrivers(): Promise<void> {
     this.logger.log('Checking for inactive drivers...');

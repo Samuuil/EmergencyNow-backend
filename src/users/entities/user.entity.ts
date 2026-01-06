@@ -18,9 +18,6 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // @Column()
-  // fullName: string;
-
   @Exclude()
   @Column({ type: 'enum', enum: Role, default: Role.USER })
   role: Role;

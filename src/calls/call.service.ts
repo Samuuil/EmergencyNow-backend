@@ -14,6 +14,7 @@ import { CallStatus } from '../common/enums/call-status.enum';
 import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
+import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class CallsService {
     @Inject(forwardRef(() => UserGateway))
     private readonly userGateway: UserGateway,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
     private readonly contactsService: ContactsService,
   ) {}
 
@@ -514,10 +516,23 @@ export class CallsService {
         ),
       );
 
-    await Promise.all(emailPromises);
+    const smsPromises = contacts
+      .filter((contact) => contact.phoneNumber)
+      .map((contact) =>
+        this.smsService.sendEmergencyAlert(
+          contact.phoneNumber,
+          contact.name,
+          userName,
+          call.latitude,
+          call.longitude,
+          call.description,
+        ),
+      );
+
+    await Promise.all([...emailPromises, ...smsPromises]);
 
     console.log(
-      `Emergency alerts sent to ${emailPromises.length} contact(s) for user ${user.id}`,
+      `Emergency alerts sent to ${emailPromises.length} email(s) and ${smsPromises.length} SMS(s) for user ${user.id}`,
     );
   }
 

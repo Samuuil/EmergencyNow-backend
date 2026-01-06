@@ -30,6 +30,6 @@ import { VerificationCodeService } from './services/verification-code.service';
   ],
   providers: [AuthService, JwtStrategy, MailService, SmsService, VerificationCodeService],
   controllers: [AuthController],
-  exports: [AuthService, MailService],
+  exports: [AuthService, MailService, SmsService],
 })
 export class AuthModule {}
