@@ -35,7 +35,8 @@ export const CallErrorMessages: Record<CallErrorCode, string> = {
   [CallErrorCode.INVALID_LOCATION]: 'Invalid location coordinates',
   [CallErrorCode.ROUTE_CALCULATION_FAILED]: 'Failed to calculate route',
   [CallErrorCode.NO_HOSPITALS_FOUND]: 'No hospitals found nearby',
-  [CallErrorCode.CONTACT_NOTIFICATION_FAILED]: 'Failed to notify emergency contacts',
+  [CallErrorCode.CONTACT_NOTIFICATION_FAILED]:
+    'Failed to notify emergency contacts',
   [CallErrorCode.DRIVER_RESPONSE_FAILED]: 'Failed to process driver response',
   [CallErrorCode.NO_AVAILABLE_DRIVERS]: 'No available drivers found',
   [CallErrorCode.INVALID_USER]: 'Invalid user',

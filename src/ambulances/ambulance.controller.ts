@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Paginate } from 'nestjs-paginate';
 import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
@@ -55,7 +69,10 @@ export class AmbulancesController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update ambulance' })
-  update(@Param('id') id: string, @Body() dto: UpdateAmbulanceDto): Promise<Ambulance> {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAmbulanceDto,
+  ): Promise<Ambulance> {
     return this.ambulancesService.update(id, dto);
   }
 
@@ -65,7 +82,11 @@ export class AmbulancesController {
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number },
   ): Promise<Ambulance> {
-    return this.ambulancesService.updateLocation(id, body.latitude, body.longitude);
+    return this.ambulancesService.updateLocation(
+      id,
+      body.latitude,
+      body.longitude,
+    );
   }
 
   @Patch(':id/driver')

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, InternalServerErrorException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
@@ -8,7 +14,10 @@ import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { StateArchive } from './entities/state-archive.entity';
 import { CreateStateArchiveDto } from './dto/create-state-archive.dto';
 import { UpdateStateArchiveDto } from './dto/update-state-archive.dto';
-import { StateArchiveErrorCode, StateArchiveErrorMessages } from './errors/state-archive-errors.enum';
+import {
+  StateArchiveErrorCode,
+  StateArchiveErrorMessages,
+} from './errors/state-archive-errors.enum';
 
 @Injectable()
 export class StateArchiveService {
@@ -23,11 +32,14 @@ export class StateArchiveService {
 
   async create(createDto: CreateStateArchiveDto): Promise<StateArchive> {
     try {
-      const existing = await this.archiveRepo.findOne({ where: { egn: createDto.egn } });
+      const existing = await this.archiveRepo.findOne({
+        where: { egn: createDto.egn },
+      });
       if (existing) {
         throw new ConflictException({
           code: StateArchiveErrorCode.EGN_ALREADY_EXISTS,
-          message: StateArchiveErrorMessages[StateArchiveErrorCode.EGN_ALREADY_EXISTS],
+          message:
+            StateArchiveErrorMessages[StateArchiveErrorCode.EGN_ALREADY_EXISTS],
         });
       }
       const archive = this.archiveRepo.create(createDto);
@@ -36,10 +48,15 @@ export class StateArchiveService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.STATE_ARCHIVE_CREATION_FAILED,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_CREATION_FAILED],
+        message:
+          StateArchiveErrorMessages[
+            StateArchiveErrorCode.STATE_ARCHIVE_CREATION_FAILED
+          ],
       });
     }
   }
@@ -60,10 +77,13 @@ export class StateArchiveService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.DATABASE_ERROR,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
+        message:
+          StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
       });
     }
   }
@@ -74,7 +94,10 @@ export class StateArchiveService {
       if (!archive) {
         throw new NotFoundException({
           code: StateArchiveErrorCode.STATE_ARCHIVE_NOT_FOUND,
-          message: StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_NOT_FOUND],
+          message:
+            StateArchiveErrorMessages[
+              StateArchiveErrorCode.STATE_ARCHIVE_NOT_FOUND
+            ],
         });
       }
       return archive;
@@ -82,36 +105,55 @@ export class StateArchiveService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.DATABASE_ERROR,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
+        message:
+          StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
       });
     }
   }
 
-  async update(id: string, updateDto: UpdateStateArchiveDto): Promise<StateArchive> {
+  async update(
+    id: string,
+    updateDto: UpdateStateArchiveDto,
+  ): Promise<StateArchive> {
     try {
       const archive = await this.findOne(id);
       if (updateDto.egn && updateDto.egn !== archive.egn) {
-        const existing = await this.archiveRepo.findOne({ where: { egn: updateDto.egn } });
+        const existing = await this.archiveRepo.findOne({
+          where: { egn: updateDto.egn },
+        });
         if (existing) {
           throw new ConflictException({
             code: StateArchiveErrorCode.EGN_ALREADY_EXISTS,
-            message: StateArchiveErrorMessages[StateArchiveErrorCode.EGN_ALREADY_EXISTS],
+            message:
+              StateArchiveErrorMessages[
+                StateArchiveErrorCode.EGN_ALREADY_EXISTS
+              ],
           });
         }
       }
       Object.assign(archive, updateDto);
       return await this.archiveRepo.save(archive);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.STATE_ARCHIVE_UPDATE_FAILED,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_UPDATE_FAILED],
+        message:
+          StateArchiveErrorMessages[
+            StateArchiveErrorCode.STATE_ARCHIVE_UPDATE_FAILED
+          ],
       });
     }
   }
@@ -124,10 +166,15 @@ export class StateArchiveService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.STATE_ARCHIVE_DELETE_FAILED,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.STATE_ARCHIVE_DELETE_FAILED],
+        message:
+          StateArchiveErrorMessages[
+            StateArchiveErrorCode.STATE_ARCHIVE_DELETE_FAILED
+          ],
       });
     }
   }
@@ -135,12 +182,13 @@ export class StateArchiveService {
   async findByEgn(egn: string): Promise<StateArchive | null> {
     try {
       let archive = await this.archiveRepo.findOne({ where: { egn } });
-      
+
       if (archive) {
         return archive;
       }
 
-      const stateArchiveUrl = this.configService.get<string>('STATE_ARCHIVE_URL');
+      const stateArchiveUrl =
+        this.configService.get<string>('STATE_ARCHIVE_URL');
       if (!stateArchiveUrl) {
         this.logger.error('STATE_ARCHIVE_URL is not configured');
         throw new InternalServerErrorException({
@@ -151,14 +199,19 @@ export class StateArchiveService {
 
       try {
         const url = `${stateArchiveUrl}/state-archive-mock/egn/${egn}`;
-        this.logger.log(`Fetching state archive data from external API: ${url}`);
-        
-        const response = await firstValueFrom(
-          this.httpService.get(url)
+        this.logger.log(
+          `Fetching state archive data from external API: ${url}`,
         );
 
-        const externalData = response.data;
-        
+        const response = await firstValueFrom(this.httpService.get(url));
+
+        const externalData = response.data as {
+          egn: string;
+          fullName: string;
+          email: string;
+          phoneNumber: string;
+        } | null;
+
         if (!externalData) {
           return null;
         }
@@ -172,14 +225,22 @@ export class StateArchiveService {
 
         archive = await this.archiveRepo.save(archive);
         this.logger.log(`Saved state archive data for EGN: ${egn}`);
-        
+
         return archive;
       } catch (httpError) {
-        if (httpError.response?.status === 404) {
+        const err = httpError as {
+          response?: { status: number };
+          message: string;
+          stack?: string;
+        };
+        if (err.response?.status === 404) {
           this.logger.warn(`State archive not found for EGN: ${egn}`);
           return null;
         }
-        this.logger.error(`Failed to fetch from external API: ${httpError.message}`, httpError.stack);
+        this.logger.error(
+          `Failed to fetch from external API: ${err.message}`,
+          err.stack,
+        );
         throw new InternalServerErrorException({
           code: StateArchiveErrorCode.DATABASE_ERROR,
           message: 'Failed to fetch state archive data from external API',
@@ -189,10 +250,13 @@ export class StateArchiveService {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
-      this.logger.error(`${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: StateArchiveErrorCode.DATABASE_ERROR,
-        message: StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
+        message:
+          StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
       });
     }
   }

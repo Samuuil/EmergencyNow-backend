@@ -11,7 +11,8 @@ export enum ProfileErrorCode {
 
 export const ProfileErrorMessages: Record<ProfileErrorCode, string> = {
   [ProfileErrorCode.PROFILE_NOT_FOUND]: 'Profile not found',
-  [ProfileErrorCode.PROFILE_ALREADY_EXISTS]: 'Profile already exists for this user',
+  [ProfileErrorCode.PROFILE_ALREADY_EXISTS]:
+    'Profile already exists for this user',
   [ProfileErrorCode.PROFILE_CREATION_FAILED]: 'Failed to create profile',
   [ProfileErrorCode.PROFILE_UPDATE_FAILED]: 'Failed to update profile',
   [ProfileErrorCode.PROFILE_DELETE_FAILED]: 'Failed to delete profile',

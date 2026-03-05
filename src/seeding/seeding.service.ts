@@ -11,14 +11,14 @@ export class SeedingService {
 
   async seedAll(): Promise<void> {
     console.log('Starting database seeding...');
-    
+
     try {
       console.log('Seeding state archive entries...');
       await this.stateArchiveSeederService.seed();
-      
+
       console.log('Seeding users...');
       await this.userSeederService.seed();
-      
+
       console.log('Database seeding completed successfully!');
     } catch (error) {
       console.error('Error during seeding:', error);
@@ -28,11 +28,11 @@ export class SeedingService {
 
   async clearAll(): Promise<void> {
     console.log('Clearing seed data...');
-    
+
     try {
       await this.userSeederService.clear();
       await this.stateArchiveSeederService.clear();
-      
+
       console.log('Seed data cleared successfully!');
     } catch (error) {
       console.error('Error during clearing:', error);

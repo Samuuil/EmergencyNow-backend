@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Paginate } from 'nestjs-paginate';
 import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
@@ -59,7 +74,10 @@ export class HospitalsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update hospital' })
-  update(@Param('id') id: string, @Body() dto: UpdateHospitalDto): Promise<Hospital> {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateHospitalDto,
+  ): Promise<Hospital> {
     return this.hospitalsService.update(id, dto);
   }
 

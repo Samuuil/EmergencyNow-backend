@@ -28,7 +28,13 @@ import { VerificationCodeService } from './services/verification-code.service';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, MailService, SmsService, VerificationCodeService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    MailService,
+    SmsService,
+    VerificationCodeService,
+  ],
   controllers: [AuthController],
   exports: [AuthService, MailService, SmsService],
 })

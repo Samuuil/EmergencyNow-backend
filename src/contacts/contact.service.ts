@@ -1,5 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { ContactErrorCode, ContactErrorMessages } from './errors/contact-errors.enum';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import {
+  ContactErrorCode,
+  ContactErrorMessages,
+} from './errors/contact-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -25,7 +34,9 @@ export class ContactsService {
       const contact = this.contactsRepository.create(dto);
       return await this.contactsRepository.save(contact);
     } catch (error) {
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_CREATION_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED],
@@ -49,7 +60,9 @@ export class ContactsService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.DATABASE_ERROR,
         message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],
@@ -76,7 +89,9 @@ export class ContactsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.DATABASE_ERROR,
         message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],
@@ -93,7 +108,9 @@ export class ContactsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_UPDATE_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED],
@@ -109,7 +126,9 @@ export class ContactsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_DELETE_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED],
@@ -133,7 +152,9 @@ export class ContactsService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.DATABASE_ERROR,
         message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],
@@ -148,7 +169,9 @@ export class ContactsService {
       });
       return contacts;
     } catch (error) {
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.DATABASE_ERROR,
         message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],
@@ -156,7 +179,10 @@ export class ContactsService {
     }
   }
 
-  async createContactForUser(userId: string, dto: CreateContactDto): Promise<Contact> {
+  async createContactForUser(
+    userId: string,
+    dto: CreateContactDto,
+  ): Promise<Contact> {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId },
@@ -184,14 +210,20 @@ export class ContactsService {
       });
 
       const savedContact = await this.contactsRepository.save(contact);
-      
-      const { user: _, ...contactWithoutUser } = savedContact;
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { user: _user, ...contactWithoutUser } = savedContact;
       return contactWithoutUser as Contact;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_CREATION_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED],
@@ -199,7 +231,11 @@ export class ContactsService {
     }
   }
 
-  async updateUserContact(userId: string, contactId: string, dto: UpdateContactDto): Promise<Contact> {
+  async updateUserContact(
+    userId: string,
+    contactId: string,
+    dto: UpdateContactDto,
+  ): Promise<Contact> {
     try {
       const contact = await this.contactsRepository.findOne({
         where: { id: contactId },
@@ -216,20 +252,27 @@ export class ContactsService {
       if (contact.user.id !== userId) {
         throw new BadRequestException({
           code: ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS,
-          message: ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
+          message:
+            ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
         });
       }
 
       Object.assign(contact, dto);
       const updatedContact = await this.contactsRepository.save(contact);
-      
-      const { user: _, ...contactWithoutUser } = updatedContact;
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { user: _user, ...contactWithoutUser } = updatedContact;
       return contactWithoutUser as Contact;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_UPDATE_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_UPDATE_FAILED],
@@ -254,16 +297,22 @@ export class ContactsService {
       if (contact.user.id !== userId) {
         throw new BadRequestException({
           code: ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS,
-          message: ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
+          message:
+            ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
         });
       }
 
       await this.contactsRepository.remove(contact);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.CONTACT_DELETE_FAILED,
         message: ContactErrorMessages[ContactErrorCode.CONTACT_DELETE_FAILED],
@@ -288,17 +337,24 @@ export class ContactsService {
       if (contact.user.id !== userId) {
         throw new BadRequestException({
           code: ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS,
-          message: ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
+          message:
+            ContactErrorMessages[ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS],
         });
       }
 
-      const { user: _, ...contactWithoutUser } = contact;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { user: _user, ...contactWithoutUser } = contact;
       return contactWithoutUser as Contact;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      this.logger.error(`${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ContactErrorMessages[ContactErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ContactErrorCode.DATABASE_ERROR,
         message: ContactErrorMessages[ContactErrorCode.DATABASE_ERROR],

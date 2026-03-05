@@ -5,16 +5,22 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { UseGuards, Logger } from '@nestjs/common';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
-@WebSocketGateway({ namespace: '/users', cors: { origin: true, credentials: true }, allowEIO3: true })
+import type { UserSocket, JwtPayload } from './user.types';
+
+@WebSocketGateway({
+  namespace: '/users',
+  cors: { origin: true, credentials: true },
+  allowEIO3: true,
+})
 @UseGuards(WsJwtGuard)
 export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private readonly logger = new Logger(UserGateway.name);
 
@@ -26,7 +32,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly config: ConfigService,
   ) {}
 
-  handleConnection(client: Socket) {
+  handleConnection(client: UserSocket) {
     const token = this.extractToken(client);
     if (!token) {
       this.logger.warn('No token provided; disconnecting.');
@@ -35,44 +41,54 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      const payload: any = this.jwt.verify(token, {
+      const payload = this.jwt.verify<JwtPayload>(token, {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
 
-      (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
+      client.user = {
+        id: payload.sub,
+        role: payload.role,
+        egn: payload.egn,
+      };
 
       this.userSockets.set(payload.sub, client.id);
       this.socketUsers.set(client.id, payload.sub);
-      this.logger.log(`User ${payload.sub} connected to /users namespace (socket ${client.id})`);
-    } catch (e: any) {
-      this.logger.warn(`Invalid token; disconnecting: ${e.message}`);
+      this.logger.log(
+        `User ${payload.sub} connected to /users namespace (socket ${client.id})`,
+      );
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      this.logger.warn(`Invalid token; disconnecting: ${message}`);
       client.disconnect(true);
     }
   }
 
-
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: UserSocket) {
     const userId = this.socketUsers.get(client.id);
     if (userId) {
       this.userSockets.delete(userId);
       this.socketUsers.delete(client.id);
-      this.logger.log(`User ${userId} disconnected from /users namespace (socket ${client.id})`);
+      this.logger.log(
+        `User ${userId} disconnected from /users namespace (socket ${client.id})`,
+      );
     }
   }
 
-  private extractToken(client: Socket): string | null {
-    const headers = (client as any)?.handshake?.headers || {};
-    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+  private extractToken(client: UserSocket): string | null {
+    const headers = client.handshake?.headers as
+      | Record<string, string>
+      | undefined;
 
-    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const authHeader = headers?.authorization || headers?.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
 
-    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
-    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
+    if (tokenFromAuth) return tokenFromAuth;
 
-    const tokenFromQuery = (client as any)?.handshake?.query?.token;
-    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery as string;
+    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
+    if (tokenFromQuery) return tokenFromQuery;
 
     return null;
   }
@@ -107,7 +123,9 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } | null;
     },
   ) {
-    this.logger.log(`[notifyLocationUpdate] Emitting ambulance.location to user ${userId}, callId=${payload.callId}, lat=${payload.ambulanceLocation.latitude}, lng=${payload.ambulanceLocation.longitude}`);
+    this.logger.log(
+      `[notifyLocationUpdate] Emitting ambulance.location to user ${userId}, callId=${payload.callId}, lat=${payload.ambulanceLocation.latitude}, lng=${payload.ambulanceLocation.longitude}`,
+    );
     this.emitToUser(userId, 'ambulance.location', payload);
   }
 
@@ -120,6 +138,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     this.emitToUser(userId, 'call.status', payload);
   }
+
   isUserOnline(userId: string): boolean {
     return this.userSockets.has(userId);
   }
@@ -130,7 +149,9 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(`User ${userId} not connected; cannot emit ${event}`);
       return;
     }
-    this.logger.log(`[emitToUser] Emitting ${event} to user ${userId} (socket ${socketId})`);
+    this.logger.log(
+      `[emitToUser] Emitting ${event} to user ${userId} (socket ${socketId})`,
+    );
     this.server.to(socketId).emit(event, data);
   }
 }

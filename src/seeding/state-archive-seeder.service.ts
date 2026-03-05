@@ -39,11 +39,13 @@ export class StateArchiveSeederService {
     ];
 
     const existingArchives = await this.stateArchiveRepository.find({
-      where: seedData.map(data => ({ egn: data.egn })),
+      where: seedData.map((data) => ({ egn: data.egn })),
     });
 
-    const existingEgns = existingArchives.map(archive => archive.egn);
-    const newArchives = seedData.filter(data => !existingEgns.includes(data.egn));
+    const existingEgns = existingArchives.map((archive) => archive.egn);
+    const newArchives = seedData.filter(
+      (data) => !existingEgns.includes(data.egn),
+    );
 
     if (newArchives.length === 0) {
       console.log('State archive seed data already exists');
@@ -52,13 +54,13 @@ export class StateArchiveSeederService {
 
     const createdArchives = await this.stateArchiveRepository.save(newArchives);
     console.log(`Created ${createdArchives.length} state archive entries`);
-    
+
     return [...existingArchives, ...createdArchives];
   }
 
   async clear(): Promise<void> {
     const seedEgns = ['1111111111', '2222222222', '3333333333', '4444444444'];
-    await this.stateArchiveRepository.delete(seedEgns.map(egn => ({ egn })));
+    await this.stateArchiveRepository.delete(seedEgns.map((egn) => ({ egn })));
     console.log('Cleared state archive seed data');
   }
 }

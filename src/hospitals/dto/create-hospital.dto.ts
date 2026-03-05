@@ -6,7 +6,10 @@ export class CreateHospitalDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Hospital address', example: 'ul. "Zdrave" 2, Sofia' })
+  @ApiProperty({
+    description: 'Hospital address',
+    example: 'ul. "Zdrave" 2, Sofia',
+  })
   @IsString()
   address: string;
 
@@ -18,7 +21,10 @@ export class CreateHospitalDto {
   @IsNumber()
   longitude: number;
 
-  @ApiPropertyOptional({ description: 'Hospital phone number', example: '+35928012345' })
+  @ApiPropertyOptional({
+    description: 'Hospital phone number',
+    example: '+35928012345',
+  })
   @IsOptional()
   @IsString()
   phoneNumber?: string;
@@ -28,7 +34,11 @@ export class CreateHospitalDto {
   @IsString()
   placeId?: string;
 
-  @ApiPropertyOptional({ description: 'Is hospital active', example: true, default: true })
+  @ApiPropertyOptional({
+    description: 'Is hospital active',
+    example: true,
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

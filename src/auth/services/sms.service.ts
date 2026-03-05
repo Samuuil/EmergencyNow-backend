@@ -11,10 +11,13 @@ export class SmsService {
   constructor(private configService: ConfigService) {
     const accountSid = this.configService.get<string>('ACCOUNT_SID');
     const authToken = this.configService.get<string>('AUTH_TOKEN');
-    this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER') || '';
+    this.twilioPhoneNumber =
+      this.configService.get<string>('TWILIO_PHONE_NUMBER') || '';
 
     if (!accountSid || !authToken) {
-      this.logger.warn('Twilio credentials not configured. SMS functionality will be limited.');
+      this.logger.warn(
+        'Twilio credentials not configured. SMS functionality will be limited.',
+      );
       this.twilioClient = null;
     } else {
       this.twilioClient = twilio(accountSid, authToken);
@@ -22,7 +25,11 @@ export class SmsService {
     }
   }
 
-  async sendVerificationCode(phoneNumber: string, code: string, fullName: string): Promise<void> {
+  async sendVerificationCode(
+    phoneNumber: string,
+    code: string,
+    fullName: string,
+  ): Promise<void> {
     try {
       this.logger.log(`Sending verification code SMS to ${phoneNumber}`);
 
@@ -39,9 +46,13 @@ export class SmsService {
         to: phoneNumber,
       });
 
-      this.logger.log(`Verification code SMS sent successfully to ${phoneNumber}: ${result.sid}`);
+      this.logger.log(
+        `Verification code SMS sent successfully to ${phoneNumber}: ${result.sid}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send verification code SMS to ${phoneNumber}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send verification code SMS to ${phoneNumber}: ${error}`,
+      );
       throw error;
     }
   }
@@ -77,9 +88,13 @@ export class SmsService {
         to: contactPhoneNumber,
       });
 
-      this.logger.log(`Emergency alert SMS sent successfully to ${contactPhoneNumber}: ${result.sid}`);
+      this.logger.log(
+        `Emergency alert SMS sent successfully to ${contactPhoneNumber}: ${result.sid}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send emergency alert SMS to ${contactPhoneNumber}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send emergency alert SMS to ${contactPhoneNumber}: ${error}`,
+      );
     }
   }
 }

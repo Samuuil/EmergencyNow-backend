@@ -1,4 +1,10 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
 import { Gender } from '../../common/enums/gender.enum';
 import { BloodType } from '../../common/enums/blood-type.enum';
 

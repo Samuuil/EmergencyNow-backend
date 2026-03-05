@@ -19,19 +19,25 @@ export enum AmbulanceErrorCode {
 
 export const AmbulanceErrorMessages: Record<AmbulanceErrorCode, string> = {
   [AmbulanceErrorCode.AMBULANCE_NOT_FOUND]: 'Ambulance not found',
-  [AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS]: 'Ambulance with this license plate already exists',
+  [AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS]:
+    'Ambulance with this license plate already exists',
   [AmbulanceErrorCode.INVALID_LICENSE_PLATE]: 'Invalid license plate format',
   [AmbulanceErrorCode.DRIVER_NOT_FOUND]: 'Driver not found',
-  [AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED]: 'Driver is already assigned to another ambulance',
+  [AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED]:
+    'Driver is already assigned to another ambulance',
   [AmbulanceErrorCode.AMBULANCE_NOT_AVAILABLE]: 'Ambulance is not available',
   [AmbulanceErrorCode.NO_AVAILABLE_AMBULANCES]: 'No available ambulances found',
-  [AmbulanceErrorCode.LOCATION_UPDATE_FAILED]: 'Failed to update ambulance location',
+  [AmbulanceErrorCode.LOCATION_UPDATE_FAILED]:
+    'Failed to update ambulance location',
   [AmbulanceErrorCode.INVALID_LOCATION]: 'Invalid location coordinates',
   [AmbulanceErrorCode.AMBULANCE_CREATION_FAILED]: 'Failed to create ambulance',
   [AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]: 'Failed to update ambulance',
   [AmbulanceErrorCode.AMBULANCE_DELETE_FAILED]: 'Failed to delete ambulance',
-  [AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED]: 'Failed to assign driver to ambulance',
-  [AmbulanceErrorCode.DRIVER_REMOVAL_FAILED]: 'Failed to remove driver from ambulance',
-  [AmbulanceErrorCode.DISTANCE_CALCULATION_FAILED]: 'Failed to calculate distance',
+  [AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED]:
+    'Failed to assign driver to ambulance',
+  [AmbulanceErrorCode.DRIVER_REMOVAL_FAILED]:
+    'Failed to remove driver from ambulance',
+  [AmbulanceErrorCode.DISTANCE_CALCULATION_FAILED]:
+    'Failed to calculate distance',
   [AmbulanceErrorCode.DATABASE_ERROR]: 'Database operation failed',
 };

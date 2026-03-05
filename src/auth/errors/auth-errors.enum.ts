@@ -23,11 +23,13 @@ export const AuthErrorMessages: Record<AuthErrorCode, string> = {
   [AuthErrorCode.USER_NOT_IN_STATE_ARCHIVE]: 'User not found in state archive',
   [AuthErrorCode.INVALID_REFRESH_TOKEN]: 'Invalid refresh token',
   [AuthErrorCode.REFRESH_TOKEN_EXPIRED]: 'Refresh token has expired',
-  [AuthErrorCode.TOKEN_GENERATION_FAILED]: 'Failed to generate authentication tokens',
+  [AuthErrorCode.TOKEN_GENERATION_FAILED]:
+    'Failed to generate authentication tokens',
   [AuthErrorCode.UNAUTHORIZED_ACCESS]: 'Unauthorized access',
   [AuthErrorCode.EMAIL_SEND_FAILED]: 'Failed to send verification email',
   [AuthErrorCode.SMS_SEND_FAILED]: 'Failed to send verification SMS',
-  [AuthErrorCode.VERIFICATION_CODE_GENERATION_FAILED]: 'Failed to generate verification code',
+  [AuthErrorCode.VERIFICATION_CODE_GENERATION_FAILED]:
+    'Failed to generate verification code',
   [AuthErrorCode.LOGOUT_FAILED]: 'Failed to logout user',
   [AuthErrorCode.INVALID_LOGIN_METHOD]: 'Invalid login method',
 };
