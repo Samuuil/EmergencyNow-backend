@@ -16,7 +16,6 @@ import { HospitalsModule } from './hospitals/hospitals.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SeedingModule } from './seeding/seeding.module';
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),

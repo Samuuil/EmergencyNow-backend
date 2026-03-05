@@ -8,33 +8,52 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { CallsService } from '../calls/call.service';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
-@WebSocketGateway({ namespace: '/drivers', cors: { origin: true, credentials: true }, allowEIO3: true })
+import type { DriverSocket, JwtPayload } from './driver.types';
+
+@WebSocketGateway({
+  namespace: '/drivers',
+  cors: { origin: true, credentials: true },
+  allowEIO3: true,
+})
 @UseGuards(WsJwtGuard)
 export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private readonly logger = new Logger(DriverGateway.name);
 
   private driverSockets = new Map<string, string>();
   private socketDrivers = new Map<string, string>();
 
-  private callOffers = new Map<string, { ambulanceId: string; rejectedAmbulanceIds: Set<string> }>();
+  private callOffers = new Map<
+    string,
+    { ambulanceId: string; rejectedAmbulanceIds: Set<string> }
+  >();
 
   private locationRequestId = 0;
   private pendingLocationRequests = new Map<
     number,
     {
       driverIdToAmbulanceId: Map<string, string>;
-      collected: Array<{ ambulanceId: string; latitude: number; longitude: number }>;
-      resolve: (value: Array<{ ambulanceId: string; latitude: number; longitude: number }>) => void;
+      collected: Array<{
+        ambulanceId: string;
+        latitude: number;
+        longitude: number;
+      }>;
+      resolve: (
+        value: Array<{
+          ambulanceId: string;
+          latitude: number;
+          longitude: number;
+        }>,
+      ) => void;
     }
   >();
 
@@ -47,7 +66,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly config: ConfigService,
   ) {}
 
-  handleConnection(client: Socket) {
+  handleConnection(client: DriverSocket) {
     const token = this.extractToken(client);
     if (!token) {
       this.logger.warn('No token provided; disconnecting.');
@@ -56,22 +75,29 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      const payload: any = this.jwt.verify(token, {
+      const payload = this.jwt.verify<JwtPayload>(token, {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
 
-      (client as any).user = { id: payload.sub, role: payload.role, egn: payload.egn };
+      client.user = {
+        id: payload.sub,
+        role: payload.role,
+        egn: payload.egn,
+      };
 
       this.driverSockets.set(payload.sub, client.id);
       this.socketDrivers.set(client.id, payload.sub);
-      this.logger.log(`Driver ${payload.sub} connected via WS (socket ${client.id})`);
-    } catch (e: any) {
-      this.logger.warn(`Invalid token; disconnecting: ${e.message}`);
+      this.logger.log(
+        `Driver ${payload.sub} connected via WS (socket ${client.id})`,
+      );
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      this.logger.warn(`Invalid token; disconnecting: ${message}`);
       client.disconnect(true);
     }
   }
 
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: DriverSocket) {
     const driverId = this.socketDrivers.get(client.id);
     if (driverId) {
       this.driverSockets.delete(driverId);
@@ -82,18 +108,22 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('call.respond')
   async onDriverRespond(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: DriverSocket,
     @MessageBody()
     data: { callId: string; accept: boolean },
   ) {
     const driverId = this.socketDrivers.get(client.id);
     if (!driverId) return;
-    await this.callsService.handleDriverResponse(data.callId, driverId, data.accept);
+    await this.callsService.handleDriverResponse(
+      data.callId,
+      driverId,
+      data.accept,
+    );
   }
 
   @SubscribeMessage('location.response')
   async onLocationResponse(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: DriverSocket,
     @MessageBody()
     data: { requestId: number; latitude: number; longitude: number },
   ) {
@@ -123,14 +153,18 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('location.update')
   async onLocationUpdate(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: DriverSocket,
     @MessageBody()
     data: { callId: string; latitude: number; longitude: number },
   ) {
     const driverId = this.socketDrivers.get(client.id);
-    this.logger.log(`[location.update] Received from socket ${client.id}, driverId=${driverId}, callId=${data?.callId}, lat=${data?.latitude}, lng=${data?.longitude}`);
+    this.logger.log(
+      `[location.update] Received from socket ${client.id}, driverId=${driverId}, callId=${data?.callId}, lat=${data?.latitude}, lng=${data?.longitude}`,
+    );
     if (!driverId) {
-      this.logger.warn(`[location.update] No driverId found for socket ${client.id}; ignoring`);
+      this.logger.warn(
+        `[location.update] No driverId found for socket ${client.id}; ignoring`,
+      );
       return;
     }
     try {
@@ -139,8 +173,15 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.latitude,
         data.longitude,
       );
-      this.logger.log(`[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`);
-      if (call && call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
+      this.logger.log(
+        `[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`,
+      );
+      if (
+        call &&
+        call.routePolyline &&
+        call.estimatedDistance &&
+        call.estimatedDuration
+      ) {
         this.emitToDriver(driverId, 'route.update', {
           callId: call.id,
           route: {
@@ -152,7 +193,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
     } catch (e) {
-      this.logger.error(`Failed to handle location update: ${e?.message || e}`);
+      this.logger.error(`Failed to handle location update`, e);
     }
   }
 
@@ -169,7 +210,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const { driverId, callId, ambulanceId } = params;
     const existing = this.callOffers.get(callId);
     const rejected = existing?.rejectedAmbulanceIds ?? new Set<string>();
-    this.callOffers.set(callId, { ambulanceId, rejectedAmbulanceIds: rejected });
+    this.callOffers.set(callId, {
+      ambulanceId,
+      rejectedAmbulanceIds: rejected,
+    });
 
     this.emitToDriver(driverId, 'call.offer', {
       callId: params.callId,
@@ -182,7 +226,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   addRejection(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? { ambulanceId: '', rejectedAmbulanceIds: new Set<string>() };
+    const entry = this.callOffers.get(callId) ?? {
+      ambulanceId: '',
+      rejectedAmbulanceIds: new Set<string>(),
+    };
     entry.rejectedAmbulanceIds.add(ambulanceId);
     this.callOffers.set(callId, entry);
   }
@@ -200,22 +247,35 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   setPendingAmbulance(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? { ambulanceId: '', rejectedAmbulanceIds: new Set<string>() };
+    const entry = this.callOffers.get(callId) ?? {
+      ambulanceId: '',
+      rejectedAmbulanceIds: new Set<string>(),
+    };
     entry.ambulanceId = ambulanceId;
     this.callOffers.set(callId, entry);
   }
 
-  sendRouteToDriver(driverId: string, payload: {
-    callId: string;
-    route: { polyline: string; distance: number; duration: number; steps: any[] };
-  }) {
+  sendRouteToDriver(
+    driverId: string,
+    payload: {
+      callId: string;
+      route: {
+        polyline: string;
+        distance: number;
+        duration: number;
+        steps: any[];
+      };
+    },
+  ) {
     this.emitToDriver(driverId, 'call.route', payload);
   }
 
   private emitToDriver(driverId: string, event: string, data: any) {
     const socketId = this.driverSockets.get(driverId);
     if (!socketId) {
-      this.logger.warn(`Driver ${driverId} not connected; cannot emit ${event}`);
+      this.logger.warn(
+        `Driver ${driverId} not connected; cannot emit ${event}`,
+      );
       return;
     }
     this.server.to(socketId).emit(event, data);
@@ -225,32 +285,37 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return this.driverSockets.has(driverId);
   }
 
-  private extractToken(client: Socket): string | null {
-    const headers = (client as any)?.handshake?.headers || {};
-    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+  private extractToken(client: DriverSocket): string | null {
+    const headers = client.handshake?.headers as
+      | Record<string, string>
+      | undefined;
 
-    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const authHeader = headers?.authorization || headers?.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
 
-    const tokenFromAuth = (client as any)?.handshake?.auth?.token;
-    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
+    if (tokenFromAuth) return tokenFromAuth;
 
-    const tokenFromQuery = (client as any)?.handshake?.query?.token;
-    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery as string;
+    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
+    if (tokenFromQuery) return tokenFromQuery;
 
     return null;
   }
 
   async refreshAvailableAmbulanceLocations(timeoutMs = 5000): Promise<void> {
-    const driverIdToAmbulanceId = await this.ambulancesService.getDriverIdToAmbulanceIdMap();
+    const driverIdToAmbulanceId =
+      await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
-    const onlineDriverIds = Array.from(driverIdToAmbulanceId.keys()).filter((dId: string) =>
-      this.driverSockets.has(dId),
+    const onlineDriverIds = Array.from(driverIdToAmbulanceId.keys()).filter(
+      (dId: string) => this.driverSockets.has(dId),
     );
 
     if (onlineDriverIds.length === 0) {
-      this.logger.log('No online drivers with available ambulances to request location from');
+      this.logger.log(
+        'No online drivers with available ambulances to request location from',
+      );
       return;
     }
 
@@ -261,13 +326,19 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     >((resolve) => {
       const pendingEntry = {
         driverIdToAmbulanceId,
-        collected: [] as Array<{ ambulanceId: string; latitude: number; longitude: number }>,
+        collected: [] as Array<{
+          ambulanceId: string;
+          latitude: number;
+          longitude: number;
+        }>,
         resolve,
       };
       this.pendingLocationRequests.set(requestId, pendingEntry);
 
       for (const driverId of onlineDriverIds) {
-        this.emitToDriver(driverId as string, 'location.request', { requestId });
+        this.emitToDriver(driverId, 'location.request', {
+          requestId,
+        });
       }
 
       setTimeout(() => {

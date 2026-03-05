@@ -18,6 +18,7 @@ export const ContactErrorMessages: Record<ContactErrorCode, string> = {
   [ContactErrorCode.MAX_CONTACTS_REACHED]: 'Maximum number of contacts reached',
   [ContactErrorCode.INVALID_CONTACT_DATA]: 'Invalid contact data',
   [ContactErrorCode.USER_NOT_FOUND]: 'User not found',
-  [ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS]: 'You can only access your own contacts',
+  [ContactErrorCode.UNAUTHORIZED_CONTACT_ACCESS]:
+    'You can only access your own contacts',
   [ContactErrorCode.DATABASE_ERROR]: 'Database operation failed',
 };

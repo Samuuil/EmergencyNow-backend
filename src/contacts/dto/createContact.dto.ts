@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsPhoneNumber } from 'class-validator';
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateContactDto {
@@ -6,11 +6,17 @@ export class CreateContactDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Contact phone number', example: '+359888123456' })
+  @ApiProperty({
+    description: 'Contact phone number',
+    example: '+359888123456',
+  })
   @IsString()
   phoneNumber: string;
 
-  @ApiPropertyOptional({ description: 'Contact email', example: 'john.doe@example.com' })
+  @ApiPropertyOptional({
+    description: 'Contact email',
+    example: 'john.doe@example.com',
+  })
   @IsOptional()
   @IsEmail()
   email?: string;

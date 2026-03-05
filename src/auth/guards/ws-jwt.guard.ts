@@ -1,15 +1,25 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { WsClient, JwtPayload } from '../types/ws.types';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
   private readonly logger = new Logger(WsJwtGuard.name);
 
-  constructor(private readonly jwt: JwtService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const client: any = context.switchToWs().getClient();
+    const client = context.switchToWs().getClient<WsClient>();
     const token = this.extractToken(client);
 
     if (!token) {
@@ -18,31 +28,40 @@ export class WsJwtGuard implements CanActivate {
     }
 
     try {
-      const payload = this.jwt.verify(token, {
+      const payload = this.jwt.verify<JwtPayload>(token, {
         secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
       });
-      client.user = { id: payload.sub, role: payload.role, egn: payload.egn };
+
+      client.user = {
+        id: payload.sub,
+        role: payload.role,
+        egn: payload.egn,
+      };
+
       this.logger.log(`WS Auth success: User ${payload.sub} authenticated`);
       return true;
-    } catch (e) {
-      this.logger.error(`WS Auth failed: Invalid token - ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      this.logger.error(`WS Auth failed: Invalid token - ${message}`);
       throw new UnauthorizedException('Invalid token');
     }
   }
 
-  private extractToken(client: any): string | null {
-    const headers = client?.handshake?.headers || {};
-    const authHeader: string | undefined = headers['authorization'] || headers['Authorization'];
+  private extractToken(client: WsClient): string | null {
+    const headers = client.handshake?.headers as
+      | Record<string, string>
+      | undefined;
 
-    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const authHeader = headers?.authorization || headers?.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
 
-    const tokenFromAuth = client?.handshake?.auth?.token;
-    if (tokenFromAuth && typeof tokenFromAuth === 'string') return tokenFromAuth;
+    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
+    if (tokenFromAuth) return tokenFromAuth;
 
-    const tokenFromQuery = client?.handshake?.query?.token;
-    if (tokenFromQuery && typeof tokenFromQuery === 'string') return tokenFromQuery;
+    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
+    if (tokenFromQuery) return tokenFromQuery;
 
     return null;
   }

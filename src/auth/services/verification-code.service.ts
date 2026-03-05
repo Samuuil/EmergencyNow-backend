@@ -31,20 +31,27 @@ export class VerificationCodeService {
     return `${this.KEY_PREFIX}:${method}:${egn}`;
   }
 
-  async saveCode(egn: string, code: string, method: 'email' | 'sms'): Promise<void> {
+  async saveCode(
+    egn: string,
+    code: string,
+    method: 'email' | 'sms',
+  ): Promise<void> {
     const normEgn = this.normalizeEgn(egn);
     const normCode = this.normalizeCode(code);
     const key = this.buildKey(normEgn, method);
     const data: VerificationCodeData = { code: normCode, method, egn: normEgn };
-    
+
     await this.redisService.setex(
       key,
       this.CODE_TTL_SECONDS,
-      JSON.stringify(data)
+      JSON.stringify(data),
     );
   }
 
-  async verifyAndConsumeCode(egn: string, code: string): Promise<VerificationCodeData> {
+  async verifyAndConsumeCode(
+    egn: string,
+    code: string,
+  ): Promise<VerificationCodeData> {
     const normEgn = this.normalizeEgn(egn);
     const normCode = this.normalizeCode(code);
     const emailKey = this.buildKey(normEgn, 'email');
@@ -58,7 +65,7 @@ export class VerificationCodeService {
     const tryParse = (val: string | null): VerificationCodeData | null => {
       if (!val) return null;
       try {
-        return JSON.parse(val);
+        return JSON.parse(val) as VerificationCodeData;
       } catch {
         return null;
       }

@@ -7,14 +7,8 @@ import { StateArchiveSeederService } from './state-archive-seeder.service';
 import { UserSeederService } from './user-seeder.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([StateArchive, User]),
-  ],
-  providers: [
-    SeedingService,
-    StateArchiveSeederService,
-    UserSeederService,
-  ],
+  imports: [TypeOrmModule.forFeature([StateArchive, User])],
+  providers: [SeedingService, StateArchiveSeederService, UserSeederService],
   exports: [SeedingService],
 })
 export class SeedingModule {}

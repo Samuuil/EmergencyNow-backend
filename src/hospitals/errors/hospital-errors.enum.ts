@@ -20,8 +20,10 @@ export const HospitalErrorMessages: Record<HospitalErrorCode, string> = {
   [HospitalErrorCode.HOSPITAL_DELETE_FAILED]: 'Failed to delete hospital',
   [HospitalErrorCode.INVALID_LOCATION]: 'Invalid location coordinates',
   [HospitalErrorCode.NO_HOSPITALS_FOUND]: 'No hospitals found',
-  [HospitalErrorCode.GOOGLE_PLACES_SYNC_FAILED]: 'Failed to sync hospitals from Google Places',
-  [HospitalErrorCode.DISTANCE_CALCULATION_FAILED]: 'Failed to calculate distance to hospital',
+  [HospitalErrorCode.GOOGLE_PLACES_SYNC_FAILED]:
+    'Failed to sync hospitals from Google Places',
+  [HospitalErrorCode.DISTANCE_CALCULATION_FAILED]:
+    'Failed to calculate distance to hospital',
   [HospitalErrorCode.INVALID_HOSPITAL_DATA]: 'Invalid hospital data',
   [HospitalErrorCode.DATABASE_ERROR]: 'Database operation failed',
 };

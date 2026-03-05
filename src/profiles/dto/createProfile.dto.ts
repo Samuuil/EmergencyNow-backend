@@ -1,4 +1,10 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Gender } from '../../common/enums/gender.enum';
 import { BloodType } from '../../common/enums/blood-type.enum';
@@ -16,7 +22,11 @@ export class CreateProfileDto {
   @IsEnum(Gender)
   gender: Gender;
 
-  @ApiPropertyOptional({ description: 'List of allergies', example: ['Penicillin', 'Peanuts'], type: [String] })
+  @ApiPropertyOptional({
+    description: 'List of allergies',
+    example: ['Penicillin', 'Peanuts'],
+    type: [String],
+  })
   @IsOptional()
   @IsString({ each: true })
   allergies?: string[];
@@ -26,17 +36,29 @@ export class CreateProfileDto {
   @IsDateString()
   dateOfBirth?: Date;
 
-  @ApiPropertyOptional({ description: 'Blood type', enum: BloodType, example: BloodType.A_POSITIVE })
+  @ApiPropertyOptional({
+    description: 'Blood type',
+    enum: BloodType,
+    example: BloodType.A_POSITIVE,
+  })
   @IsOptional()
   @IsEnum(BloodType)
   bloodType?: BloodType;
 
-  @ApiPropertyOptional({ description: 'List of medicines the user is taking', example: ['Aspirin', 'Insulin'], type: [String] })
+  @ApiPropertyOptional({
+    description: 'List of medicines the user is taking',
+    example: ['Aspirin', 'Insulin'],
+    type: [String],
+  })
   @IsOptional()
   @IsString({ each: true })
   medicines?: string[];
 
-  @ApiPropertyOptional({ description: 'List of illnesses', example: ['Diabetes', 'Hypertension'], type: [String] })
+  @ApiPropertyOptional({
+    description: 'List of illnesses',
+    example: ['Diabetes', 'Hypertension'],
+    type: [String],
+  })
   @IsOptional()
   @IsString({ each: true })
   illnesses?: string[];

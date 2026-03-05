@@ -6,10 +6,7 @@ import { StateArchiveService } from './state-archive.service';
 import { StateArchiveController } from './state-archive.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([StateArchive]),
-    HttpModule,
-  ],
+  imports: [TypeOrmModule.forFeature([StateArchive]), HttpModule],
   controllers: [StateArchiveController],
   providers: [StateArchiveService],
   exports: [StateArchiveService],

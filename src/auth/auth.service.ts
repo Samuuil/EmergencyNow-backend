@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/user.service';
@@ -25,13 +29,13 @@ export class AuthService {
 
   async initiateLogin(dto: InitiateLoginDto): Promise<{ message: string }> {
     const stateArchive = await this.stateArchiveService.findByEgn(dto.egn);
-    
+
     if (!stateArchive) {
       throw new NotFoundException('User not found in state archive');
     }
 
     const code = this.verificationCodeService.generateCode();
-    
+
     await this.verificationCodeService.saveCode(dto.egn, code, dto.method);
 
     if (dto.method === LoginMethod.EMAIL) {
@@ -51,7 +55,9 @@ export class AuthService {
     }
   }
 
-  async verifyCode(dto: VerifyCodeDto): Promise<{ accessToken: string; refreshToken: string }> {
+  async verifyCode(
+    dto: VerifyCodeDto,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     await this.verificationCodeService.verifyAndConsumeCode(dto.egn, dto.code);
 
     const stateArchive = await this.stateArchiveService.findByEgn(dto.egn);
@@ -60,32 +66,41 @@ export class AuthService {
     }
 
     let user = await this.usersService.findByStateArchiveId(stateArchive.id);
-    
+
     if (!user) {
-      user = await this.usersService.createWithExistingStateArchive(stateArchive.id);
+      user = await this.usersService.createWithExistingStateArchive(
+        stateArchive.id,
+      );
     }
 
     return this.generateTokens(user);
   }
 
-  async refreshToken(oldRefreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    let payload: any;
+  async refreshToken(
+    oldRefreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    let payload: { sub: string; [key: string]: any };
     try {
       payload = this.jwtService.verify(oldRefreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'defaultRefreshSecret',
+        secret:
+          this.configService.get<string>('JWT_REFRESH_SECRET') ||
+          'defaultRefreshSecret',
       });
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     const user = await this.usersService.findOne(payload.sub);
-    
+
     if (!user || !user.refreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const isTokenValid = await bcrypt.compare(oldRefreshToken, user.refreshToken);
-    
+    const isTokenValid = await bcrypt.compare(
+      oldRefreshToken,
+      user.refreshToken,
+    );
+
     if (!isTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -93,15 +108,17 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  private async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
+  private async generateTokens(
+    user: User,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     if (this.configService.get<string>('SABOTAGE') === 'TRUE') {
       return {
-        'accessToken' : 'NqmaToken',
-        'refreshToken' : 'NqmaToken'
-      }
+        accessToken: 'NqmaToken',
+        refreshToken: 'NqmaToken',
+      };
     }
-    const payload = { 
-      sub: user.id, 
+    const payload = {
+      sub: user.id,
       role: user.role,
       egn: user.stateArchive?.egn,
     };
@@ -112,7 +129,9 @@ export class AuthService {
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'defaultRefreshSecret',
+      secret:
+        this.configService.get<string>('JWT_REFRESH_SECRET') ||
+        'defaultRefreshSecret',
       expiresIn: '7d',
     });
 

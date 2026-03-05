@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { Paginate } from 'nestjs-paginate';
 import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
@@ -39,7 +53,7 @@ export class CallsController {
   @Get('me')
   @ApiOperation({ summary: 'Get all calls for the authenticated user' })
   @ApiQuery({ type: BasePaginationDto })
-  findMyCalls(@CurrentUser() user: User, @Paginate() query: PaginateQuery,) {
+  findMyCalls(@CurrentUser() user: User, @Paginate() query: PaginateQuery) {
     return this.callsService.findByUser(user.id, query);
   }
 
@@ -75,7 +89,11 @@ export class CallsController {
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number },
   ) {
-    return this.callsService.getHospitalsForCall(id, body.latitude, body.longitude);
+    return this.callsService.getHospitalsForCall(
+      id,
+      body.latitude,
+      body.longitude,
+    );
   }
 
   @Post(':id/select-hospital')
@@ -114,7 +132,11 @@ export class CallsController {
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number },
   ): Promise<Call> {
-    return this.callsService.updateAmbulanceLocation(id, body.latitude, body.longitude);
+    return this.callsService.updateAmbulanceLocation(
+      id,
+      body.latitude,
+      body.longitude,
+    );
   }
 
   @Patch(':id/status')
@@ -138,6 +160,8 @@ export class CallsController {
   @Roles(Role.ADMIN, Role.DRIVER)
   @ApiOperation({ summary: 'Delete call' })
   remove(@Param('id') id: string): Promise<{ message: string }> {
-    return this.callsService.remove(id).then(() => ({ message: 'Call deleted successfully' }));
+    return this.callsService
+      .remove(id)
+      .then(() => ({ message: 'Call deleted successfully' }));
   }
 }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -22,7 +27,9 @@ export class UsersService {
       const user = this.usersRepository.create(dto);
       return await this.usersRepository.save(user);
     } catch (error) {
-      this.logger.error(`${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.USER_CREATION_FAILED,
         message: UserErrorMessages[UserErrorCode.USER_CREATION_FAILED],
@@ -44,7 +51,9 @@ export class UsersService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.DATABASE_ERROR,
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
@@ -69,7 +78,9 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.DATABASE_ERROR,
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
@@ -86,7 +97,9 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${UserErrorMessages[UserErrorCode.USER_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.USER_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.USER_UPDATE_FAILED,
         message: UserErrorMessages[UserErrorCode.USER_UPDATE_FAILED],
@@ -107,7 +120,9 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${UserErrorMessages[UserErrorCode.USER_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.USER_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.USER_DELETE_FAILED,
         message: UserErrorMessages[UserErrorCode.USER_DELETE_FAILED],
@@ -122,7 +137,9 @@ export class UsersService {
         relations: ['stateArchive', 'profile'],
       });
     } catch (error) {
-      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.DATABASE_ERROR,
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
@@ -130,13 +147,18 @@ export class UsersService {
     }
   }
 
-  async updateRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
+  async updateRefreshToken(
+    userId: string,
+    refreshToken: string | null,
+  ): Promise<void> {
     try {
-      await this.usersRepository.update(userId, { 
-        refreshToken: refreshToken ?? undefined 
+      await this.usersRepository.update(userId, {
+        refreshToken: refreshToken ?? undefined,
       });
     } catch (error) {
-      this.logger.error(`${UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED,
         message: UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED],
@@ -144,15 +166,20 @@ export class UsersService {
     }
   }
 
-  async createWithExistingStateArchive(stateArchiveId: string, role?: Role): Promise<User> {
+  async createWithExistingStateArchive(
+    stateArchiveId: string,
+    role?: Role,
+  ): Promise<User> {
     try {
       const user = this.usersRepository.create({
         role: role || Role.USER,
-        stateArchive: { id: stateArchiveId } as any,
+        stateArchive: { id: stateArchiveId } as { id: string },
       });
       return await this.usersRepository.save(user);
     } catch (error) {
-      this.logger.error(`${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.USER_CREATION_FAILED,
         message: UserErrorMessages[UserErrorCode.USER_CREATION_FAILED],
@@ -168,7 +195,9 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.DATABASE_ERROR,
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
@@ -182,7 +211,7 @@ export class UsersService {
         where: { id: userId },
         relations: ['stateArchive'],
       });
-      
+
       if (!user) {
         throw new NotFoundException({
           code: UserErrorCode.USER_NOT_FOUND,
@@ -202,7 +231,9 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: UserErrorCode.DATABASE_ERROR,
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],

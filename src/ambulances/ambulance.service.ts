@@ -1,13 +1,26 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Ambulance } from './entities/ambulance.entity';
 import { User } from '../users/entities/user.entity';
-import { GoogleMapsService, Location } from '../common/services/google-maps.service';
+import {
+  GoogleMapsService,
+  Location,
+} from '../common/services/google-maps.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
-import { AmbulanceErrorCode, AmbulanceErrorMessages } from './errors/ambulance-errors.enum';
+import {
+  AmbulanceErrorCode,
+  AmbulanceErrorMessages,
+} from './errors/ambulance-errors.enum';
 
 export interface AmbulanceWithDistance extends Ambulance {
   distance: number;
@@ -34,10 +47,11 @@ export class AmbulancesService {
       if (existing) {
         throw new ConflictException({
           code: AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS,
-          message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS],
+          message:
+            AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS],
         });
       }
-    
+
       if (driverId) {
         const driver = await this.userRepository.findOne({
           where: { id: driverId },
@@ -45,32 +59,37 @@ export class AmbulancesService {
         if (!driver) {
           throw new NotFoundException({
             code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
-            message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
+            message:
+              AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
           });
         }
       }
-    
+
       const ambulance = this.ambulanceRepository.create({
         ...dto,
         driverId: driverId ?? null,
         available: true,
       });
-    
+
       return await this.ambulanceRepository.save(ambulance);
     } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException) {
+      if (
+        error instanceof ConflictException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.AMBULANCE_CREATION_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_CREATION_FAILED],
       });
     }
   }
-  
-  
-  
+
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.ambulanceRepository, {
@@ -85,7 +104,9 @@ export class AmbulancesService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DATABASE_ERROR,
         message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
@@ -102,7 +123,8 @@ export class AmbulancesService {
       if (!ambulance) {
         throw new NotFoundException({
           code: AmbulanceErrorCode.AMBULANCE_NOT_FOUND,
-          message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_NOT_FOUND],
+          message:
+            AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_NOT_FOUND],
         });
       }
 
@@ -111,7 +133,9 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DATABASE_ERROR,
         message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
@@ -131,7 +155,10 @@ export class AmbulancesService {
         if (existingAmbulance) {
           throw new ConflictException({
             code: AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS,
-            message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS],
+            message:
+              AmbulanceErrorMessages[
+                AmbulanceErrorCode.AMBULANCE_ALREADY_EXISTS
+              ],
           });
         }
       }
@@ -144,7 +171,8 @@ export class AmbulancesService {
         if (!driver) {
           throw new NotFoundException({
             code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
-            message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
+            message:
+              AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
           });
         }
       }
@@ -152,13 +180,19 @@ export class AmbulancesService {
       Object.assign(ambulance, dto);
       return await this.ambulanceRepository.save(ambulance);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
       });
     }
   }
@@ -171,10 +205,13 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.AMBULANCE_DELETE_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_DELETE_FAILED],
       });
     }
   }
@@ -193,7 +230,9 @@ export class AmbulancesService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DATABASE_ERROR,
         message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
@@ -207,7 +246,9 @@ export class AmbulancesService {
         where: { available: true },
       });
     } catch (error) {
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DATABASE_ERROR,
         message: AmbulanceErrorMessages[AmbulanceErrorCode.DATABASE_ERROR],
@@ -224,7 +265,11 @@ export class AmbulancesService {
   }
 
   async bulkUpdateLocations(
-    updates: Array<{ ambulanceId: string; latitude: number; longitude: number }>,
+    updates: Array<{
+      ambulanceId: string;
+      latitude: number;
+      longitude: number;
+    }>,
   ): Promise<void> {
     if (updates.length === 0) return;
     await Promise.all(
@@ -259,10 +304,11 @@ export class AmbulancesService {
       longitude: amb.longitude,
     }));
 
-    const distances = await this.googleMapsService.getDistancesToMultipleDestinations(
-      location,
-      ambulanceLocations,
-    );
+    const distances =
+      await this.googleMapsService.getDistancesToMultipleDestinations(
+        location,
+        ambulanceLocations,
+      );
 
     let minIndex = 0;
     let minDuration = distances[0].duration;
@@ -303,10 +349,11 @@ export class AmbulancesService {
       longitude: amb.longitude,
     }));
 
-    const distances = await this.googleMapsService.getDistancesToMultipleDestinations(
-      location,
-      ambulanceLocations,
-    );
+    const distances =
+      await this.googleMapsService.getDistancesToMultipleDestinations(
+        location,
+        ambulanceLocations,
+      );
 
     let minIndex = 0;
     let minDuration = distances[0].duration;
@@ -334,10 +381,13 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
       });
     }
   }
@@ -351,15 +401,22 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.AMBULANCE_UPDATE_FAILED],
       });
     }
   }
 
-  async updateLocation(id: string, latitude: number, longitude: number): Promise<Ambulance> {
+  async updateLocation(
+    id: string,
+    latitude: number,
+    longitude: number,
+  ): Promise<Ambulance> {
     try {
       const ambulance = await this.findOne(id);
       ambulance.latitude = latitude;
@@ -369,10 +426,13 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.LOCATION_UPDATE_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.LOCATION_UPDATE_FAILED],
       });
     }
   }
@@ -399,7 +459,8 @@ export class AmbulancesService {
       if (ambulanceWithDriver && ambulanceWithDriver.id !== id) {
         throw new BadRequestException({
           code: AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED,
-          message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED],
+          message:
+            AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ALREADY_ASSIGNED],
         });
       }
 
@@ -407,13 +468,19 @@ export class AmbulancesService {
       ambulance.lastCallAcceptedAt = new Date();
       return await this.ambulanceRepository.save(ambulance);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_ASSIGNMENT_FAILED],
       });
     }
   }
@@ -427,10 +494,13 @@ export class AmbulancesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: AmbulanceErrorCode.DRIVER_REMOVAL_FAILED,
-        message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED],
+        message:
+          AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_REMOVAL_FAILED],
       });
     }
   }
@@ -458,7 +528,9 @@ export class AmbulancesService {
     });
   }
 
-  async removeInactiveDrivers(inactivityThresholdHours: number = 5): Promise<string[]> {
+  async removeInactiveDrivers(
+    inactivityThresholdHours: number = 5,
+  ): Promise<string[]> {
     const thresholdDate = new Date();
     thresholdDate.setHours(thresholdDate.getHours() - inactivityThresholdHours);
 
@@ -467,7 +539,7 @@ export class AmbulancesService {
       .where('ambulance.driverId IS NOT NULL')
       .andWhere(
         '(ambulance.lastCallAcceptedAt IS NULL OR ambulance.lastCallAcceptedAt < :threshold)',
-        { threshold: thresholdDate }
+        { threshold: thresholdDate },
       )
       .getMany();
 

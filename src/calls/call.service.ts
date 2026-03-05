@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -8,7 +14,10 @@ import { UpdateCallDto } from './dto/updateCall.dto';
 import { User } from '../users/entities/user.entity';
 import { Ambulance } from '../ambulances/entities/ambulance.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
-import { HospitalsService, HospitalWithDistance } from '../hospitals/hospitals.service';
+import {
+  HospitalsService,
+  HospitalWithDistance,
+} from '../hospitals/hospitals.service';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { DriverGateway } from '../realtime/driver.gateway';
@@ -67,19 +76,25 @@ export class CallsService {
 
   async dispatchNearestAmbulance(callId: string): Promise<Call> {
     const call = await this.findOne(callId);
-    if (call.status === CallStatus.COMPLETED || call.status === CallStatus.CANCELLED) {
+    if (
+      call.status === CallStatus.COMPLETED ||
+      call.status === CallStatus.CANCELLED
+    ) {
       throw new BadRequestException('Call is already completed or cancelled');
     }
     await this.proposeToNearestDriver(callId);
     return call;
   }
 
-  private async proposeToNearestDriver(callId: string, skipLocationRefresh = false): Promise<void> {
+  private async proposeToNearestDriver(
+    callId: string,
+    skipLocationRefresh = false,
+  ): Promise<void> {
     const call = await this.callsRepository.findOne({
       where: { id: callId },
       relations: ['user', 'user.stateArchive', 'ambulance'],
     });
-    
+
     if (!call) return;
 
     if (!skipLocationRefresh) {
@@ -94,7 +109,7 @@ export class CallsService {
 
     if (call.user?.stateArchive?.egn) {
       const callerEgn = call.user.stateArchive.egn;
-      
+
       const ambulancesWithMatchingDriverEgn = await this.ambulanceRepository
         .createQueryBuilder('ambulance')
         .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
@@ -110,21 +125,23 @@ export class CallsService {
       });
     }
 
-    let candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
-      { latitude: call.latitude, longitude: call.longitude },
-      excluded,
-    );
-
-    while (
-      candidate && (
-        !candidate.driverId || !this.driverGateway.isDriverOnline(candidate.driverId)
-      )
-    ) {
-      excluded.push(candidate.id);
-      candidate = await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
+    let candidate =
+      await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
         { latitude: call.latitude, longitude: call.longitude },
         excluded,
       );
+
+    while (
+      candidate &&
+      (!candidate.driverId ||
+        !this.driverGateway.isDriverOnline(candidate.driverId))
+    ) {
+      excluded.push(candidate.id);
+      candidate =
+        await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
+          { latitude: call.latitude, longitude: call.longitude },
+          excluded,
+        );
     }
 
     if (!candidate) {
@@ -137,13 +154,16 @@ export class CallsService {
     let duration = 0;
     try {
       const res = await this.googleMapsService.getDistanceAndDuration(
-        { latitude: candidate.latitude!, longitude: candidate.longitude! },
+        { latitude: candidate.latitude, longitude: candidate.longitude },
         { latitude: call.latitude, longitude: call.longitude },
       );
       distance = res.distance;
       duration = res.duration;
     } catch (error) {
-      console.error('getDistanceAndDuration failed, sending offer without ETA:', error);
+      console.error(
+        'getDistanceAndDuration failed, sending offer without ETA:',
+        error,
+      );
     }
 
     this.driverGateway.offerCall({
@@ -158,7 +178,11 @@ export class CallsService {
     });
   }
 
-  async handleDriverResponse(callId: string, driverId: string, accept: boolean): Promise<void> {
+  async handleDriverResponse(
+    callId: string,
+    driverId: string,
+    accept: boolean,
+  ): Promise<void> {
     const call = await this.findOne(callId);
 
     const ambulance = await this.ambulancesService.findByDriver(driverId);
@@ -176,7 +200,7 @@ export class CallsService {
     }
 
     const route = await this.googleMapsService.getRoute(
-      { latitude: ambulance.latitude!, longitude: ambulance.longitude! },
+      { latitude: ambulance.latitude, longitude: ambulance.longitude },
       { latitude: call.latitude, longitude: call.longitude },
     );
 
@@ -198,9 +222,9 @@ export class CallsService {
     this.driverGateway.sendRouteToDriver(driverId, {
       callId: call.id,
       route: {
-        polyline: call.routePolyline!,
-        distance: call.estimatedDistance!,
-        duration: call.estimatedDuration!,
+        polyline: call.routePolyline,
+        distance: call.estimatedDistance,
+        duration: call.estimatedDuration,
         steps: call.routeSteps || [],
       },
     });
@@ -210,13 +234,13 @@ export class CallsService {
         callId: call.id,
         ambulanceId: ambulance.id,
         ambulanceLocation: {
-          latitude: call.ambulanceCurrentLatitude!,
-          longitude: call.ambulanceCurrentLongitude!,
+          latitude: call.ambulanceCurrentLatitude,
+          longitude: call.ambulanceCurrentLongitude,
         },
         route: {
-          polyline: call.routePolyline!,
-          distance: call.estimatedDistance!,
-          duration: call.estimatedDuration!,
+          polyline: call.routePolyline,
+          distance: call.estimatedDistance,
+          duration: call.estimatedDuration,
           steps: call.routeSteps || [],
         },
       });
@@ -234,11 +258,18 @@ export class CallsService {
       throw new BadRequestException('No ambulance assigned to this call');
     }
 
-    if (call.status === CallStatus.COMPLETED || call.status === CallStatus.CANCELLED) {
+    if (
+      call.status === CallStatus.COMPLETED ||
+      call.status === CallStatus.CANCELLED
+    ) {
       throw new BadRequestException('Call is already completed or cancelled');
     }
 
-    await this.ambulancesService.updateLocation(call.ambulance.id, latitude, longitude);
+    await this.ambulancesService.updateLocation(
+      call.ambulance.id,
+      latitude,
+      longitude,
+    );
 
     call.ambulanceCurrentLatitude = latitude;
     call.ambulanceCurrentLongitude = longitude;
@@ -249,8 +280,8 @@ export class CallsService {
       this.userGateway.notifyLocationUpdate(call.user.id, {
         callId: call.id,
         ambulanceLocation: {
-          latitude: call.ambulanceCurrentLatitude!,
-          longitude: call.ambulanceCurrentLongitude!,
+          latitude: call.ambulanceCurrentLatitude,
+          longitude: call.ambulanceCurrentLongitude,
         },
         route:
           call.routePolyline && call.estimatedDistance && call.estimatedDuration
@@ -394,14 +425,13 @@ export class CallsService {
 
   async remove(id: string): Promise<void> {
     const call = await this.findOne(id);
-    
+
     if (call.ambulance && call.status !== CallStatus.COMPLETED) {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
-    
+
     await this.callsRepository.remove(call);
   }
-
 
   async getHospitalsForCall(
     callId: string,
@@ -411,7 +441,9 @@ export class CallsService {
     const call = await this.findOne(callId);
 
     if (call.status !== CallStatus.ARRIVED) {
-      throw new BadRequestException('Hospitals can only be viewed after arriving at patient location');
+      throw new BadRequestException(
+        'Hospitals can only be viewed after arriving at patient location',
+      );
     }
 
     return this.hospitalsService.findNearestHospitals(
@@ -429,7 +461,9 @@ export class CallsService {
     const call = await this.findOne(callId);
 
     if (call.status !== CallStatus.ARRIVED) {
-      throw new BadRequestException('Hospital can only be selected after arriving at patient location');
+      throw new BadRequestException(
+        'Hospital can only be selected after arriving at patient location',
+      );
     }
 
     const hospital = await this.hospitalsService.findOne(hospitalId);
@@ -451,7 +485,11 @@ export class CallsService {
 
     const savedCall = await this.callsRepository.save(call);
 
-    this.notifyEmergencyContactsAboutHospital(call, hospital.name, route.duration).catch((err) =>
+    this.notifyEmergencyContactsAboutHospital(
+      call,
+      hospital.name,
+      route.duration,
+    ).catch((err) =>
       console.error('Failed to notify emergency contacts about hospital:', err),
     );
 
@@ -489,7 +527,10 @@ export class CallsService {
     };
   }
 
-  private async notifyEmergencyContactsAboutCall(user: User, call: Call): Promise<void> {
+  private async notifyEmergencyContactsAboutCall(
+    user: User,
+    call: Call,
+  ): Promise<void> {
     const contacts = await this.contactsService.getUserContactsList(user.id);
 
     if (contacts.length === 0) {
@@ -501,7 +542,10 @@ export class CallsService {
       where: { id: user.id },
       relations: ['stateArchive'],
     });
-    const userName = fullUser?.stateArchive?.fullName || fullUser?.stateArchive?.email || 'A user';
+    const userName =
+      fullUser?.stateArchive?.fullName ||
+      fullUser?.stateArchive?.email ||
+      'A user';
 
     const emailPromises = contacts
       .filter((contact) => contact.email)
@@ -542,11 +586,15 @@ export class CallsService {
     estimatedDuration?: number,
   ): Promise<void> {
     if (!call.user) {
-      console.log(`No user associated with call ${call.id}, skipping hospital notification`);
+      console.log(
+        `No user associated with call ${call.id}, skipping hospital notification`,
+      );
       return;
     }
 
-    const contacts = await this.contactsService.getUserContactsList(call.user.id);
+    const contacts = await this.contactsService.getUserContactsList(
+      call.user.id,
+    );
 
     if (contacts.length === 0) {
       console.log(`No emergency contacts found for user ${call.user.id}`);
@@ -557,7 +605,10 @@ export class CallsService {
       where: { id: call.user.id },
       relations: ['stateArchive'],
     });
-    const userName = fullUser?.stateArchive?.fullName || fullUser?.stateArchive?.email || 'Your contact';
+    const userName =
+      fullUser?.stateArchive?.fullName ||
+      fullUser?.stateArchive?.email ||
+      'Your contact';
 
     const emailPromises = contacts
       .filter((contact) => contact.email)

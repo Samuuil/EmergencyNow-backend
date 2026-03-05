@@ -8,8 +8,11 @@ export class RedisService implements OnModuleDestroy {
   private readonly client: Redis;
 
   constructor(private configService: ConfigService) {
-    const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6379');
-    
+    const redisUrl = this.configService.get<string>(
+      'REDIS_URL',
+      'redis://localhost:6379',
+    );
+
     this.client = new Redis(redisUrl, {
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);

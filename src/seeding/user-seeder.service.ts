@@ -45,12 +45,18 @@ export class UserSeederService {
     ];
 
     const existingUsers = await this.userRepository.find({
-      where: userData.map(data => ({ stateArchive: { id: data.stateArchive.id } })),
+      where: userData.map((data) => ({
+        stateArchive: { id: data.stateArchive.id },
+      })),
       relations: ['stateArchive'],
     });
 
-    const existingStateArchiveIds = existingUsers.map(user => user.stateArchive.id);
-    const newUsers = userData.filter(data => !existingStateArchiveIds.includes(data.stateArchive.id));
+    const existingStateArchiveIds = existingUsers.map(
+      (user) => user.stateArchive.id,
+    );
+    const newUsers = userData.filter(
+      (data) => !existingStateArchiveIds.includes(data.stateArchive.id),
+    );
 
     if (newUsers.length === 0) {
       console.log('User seed data already exists');
@@ -58,9 +64,13 @@ export class UserSeederService {
     }
 
     const createdUsers = await this.userRepository.save(newUsers);
-    console.log(`Created ${createdUsers.length} users with roles:`, 
-      createdUsers.map(user => `${user.role} (${user.stateArchive.fullName})`));
-    
+    console.log(
+      `Created ${createdUsers.length} users with roles:`,
+      createdUsers.map(
+        (user) => `${user.role} (${user.stateArchive.fullName})`,
+      ),
+    );
+
     return [...existingUsers, ...createdUsers];
   }
 
@@ -75,9 +85,11 @@ export class UserSeederService {
 
     if (stateArchives.length > 0) {
       const users = await this.userRepository.find({
-        where: stateArchives.map(archive => ({ stateArchive: { id: archive.id } })),
+        where: stateArchives.map((archive) => ({
+          stateArchive: { id: archive.id },
+        })),
       });
-      
+
       if (users.length > 0) {
         await this.userRepository.remove(users);
         console.log('Cleared user seed data');

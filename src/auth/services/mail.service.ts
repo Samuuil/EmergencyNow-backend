@@ -4,17 +4,23 @@ import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailService {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter<nodemailer.SentMessageInfo>;
   private readonly logger = new Logger(MailService.name);
 
   constructor(private configService: ConfigService) {
     const host = this.configService.get<string>('MAIL_HOST', 'smtp.gmail.com');
-    const port = parseInt(this.configService.get<string>('MAIL_PORT', '587'), 10);
+    const port = parseInt(
+      this.configService.get<string>('MAIL_PORT', '587'),
+      10,
+    );
     const secureStr = this.configService.get<string>('MAIL_SECURE', 'false');
     const secure = secureStr === 'true';
-    
-    this.logger.log(`Initializing mail service with host=${host}, port=${port}, secure=${secure}`);
-    
+
+    this.logger.log(
+      `Initializing mail service with host=${host}, port=${port}, secure=${secure}`,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     this.transporter = nodemailer.createTransport({
       host: host,
       port: port,
@@ -25,7 +31,8 @@ export class MailService {
         pass: this.configService.get<string>('MAIL_PASSWORD'),
       },
       tls: {
-        rejectUnauthorized: this.configService.get<string>('NODE_ENV') === 'production',
+        rejectUnauthorized:
+          this.configService.get<string>('NODE_ENV') === 'production',
       },
       logger: true,
       debug: this.configService.get<string>('NODE_ENV') !== 'production',
@@ -81,10 +88,16 @@ export class MailService {
         `,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Emergency alert sent successfully to ${contactEmail}: ${info.messageId}`);
+      this.logger.log(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        `Emergency alert sent successfully to ${contactEmail}: ${info.messageId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send emergency alert to ${contactEmail}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send emergency alert to ${contactEmail}: ${error}`,
+      );
     }
   }
 
@@ -134,17 +147,27 @@ export class MailService {
         `,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Hospital update sent successfully to ${contactEmail}: ${info.messageId}`);
+      this.logger.log(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        `Hospital update sent successfully to ${contactEmail}: ${info.messageId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send hospital update to ${contactEmail}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send hospital update to ${contactEmail}: ${error}`,
+      );
     }
   }
 
-  async sendVerificationCode(email: string, code: string, fullName: string): Promise<void> {
+  async sendVerificationCode(
+    email: string,
+    code: string,
+    fullName: string,
+  ): Promise<void> {
     try {
       this.logger.log(`Sending verification code to ${email}`);
-      
+
       const mailOptions = {
         from: this.configService.get<string>('MAIL_FROM'),
         to: email,
@@ -165,10 +188,13 @@ export class MailService {
         `,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.log(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
-      this.logger.error(`Failed to send email: ${error.message}`, error.stack);
+      const err = error as Error;
+      this.logger.error(`Failed to send email: ${err.message}`, err.stack);
       throw error;
     }
   }

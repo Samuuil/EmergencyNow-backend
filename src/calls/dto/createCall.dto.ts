@@ -2,7 +2,10 @@ import { IsNumber, IsOptional, IsString, IsNotEmpty } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateCallDto {
-  @ApiPropertyOptional({ description: 'Emergency description', example: 'Patient has chest pain and difficulty breathing' })
+  @ApiPropertyOptional({
+    description: 'Emergency description',
+    example: 'Patient has chest pain and difficulty breathing',
+  })
   @IsOptional()
   @IsString()
   description: string;
@@ -11,7 +14,10 @@ export class CreateCallDto {
   @IsNumber()
   latitude: number;
 
-  @ApiProperty({ description: 'Emergency location longitude', example: 23.3219 })
+  @ApiProperty({
+    description: 'Emergency location longitude',
+    example: 23.3219,
+  })
   @IsNumber()
   longitude: number;
 

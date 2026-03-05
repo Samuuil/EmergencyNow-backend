@@ -1,5 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { ProfileErrorCode, ProfileErrorMessages } from './errors/profile-errors.enum';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import {
+  ProfileErrorCode,
+  ProfileErrorMessages,
+} from './errors/profile-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -24,7 +32,9 @@ export class ProfilesService {
       const profile = this.profileRepository.create(dto);
       return await this.profileRepository.save(profile);
     } catch (error) {
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.PROFILE_CREATION_FAILED,
         message: ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED],
@@ -35,7 +45,14 @@ export class ProfilesService {
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.profileRepository, {
-        sortableColumns: ['id', 'height', 'weight', 'gender', 'dateOfBirth', 'bloodType'],
+        sortableColumns: [
+          'id',
+          'height',
+          'weight',
+          'gender',
+          'dateOfBirth',
+          'bloodType',
+        ],
         defaultSortBy: [['id', 'ASC']],
         searchableColumns: [],
         filterableColumns: {
@@ -46,7 +63,9 @@ export class ProfilesService {
         maxLimit: 100,
       });
     } catch (error) {
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.DATABASE_ERROR,
         message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],
@@ -68,7 +87,9 @@ export class ProfilesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.DATABASE_ERROR,
         message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],
@@ -84,7 +105,9 @@ export class ProfilesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.PROFILE_UPDATE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.PROFILE_UPDATE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.PROFILE_UPDATE_FAILED,
         message: ProfileErrorMessages[ProfileErrorCode.PROFILE_UPDATE_FAILED],
@@ -105,7 +128,9 @@ export class ProfilesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.PROFILE_DELETE_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.PROFILE_DELETE_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.PROFILE_DELETE_FAILED,
         message: ProfileErrorMessages[ProfileErrorCode.PROFILE_DELETE_FAILED],
@@ -113,7 +138,10 @@ export class ProfilesService {
     }
   }
 
-  async createOrUpdateForUser(userId: string, dto: CreateProfileDto | UpdateProfileDto): Promise<Profile> {
+  async createOrUpdateForUser(
+    userId: string,
+    dto: CreateProfileDto | UpdateProfileDto,
+  ): Promise<Profile> {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId },
@@ -133,17 +161,19 @@ export class ProfilesService {
       } else {
         const profile = this.profileRepository.create(dto);
         const savedProfile = await this.profileRepository.save(profile);
-        
+
         user.profile = savedProfile;
         await this.userRepository.save(user);
-        
+
         return savedProfile;
       }
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.PROFILE_CREATION_FAILED,
         message: ProfileErrorMessages[ProfileErrorCode.PROFILE_CREATION_FAILED],
@@ -177,7 +207,9 @@ export class ProfilesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error.message}`, error.stack);
+      this.logger.error(
+        `${ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
       throw new InternalServerErrorException({
         code: ProfileErrorCode.DATABASE_ERROR,
         message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],
@@ -188,8 +220,8 @@ export class ProfilesService {
   async getProfileByEgn(egn: string): Promise<Profile> {
     try {
       const user = await this.userRepository.findOne({
-        where: { 
-          stateArchive: { egn } 
+        where: {
+          stateArchive: { egn },
         },
         relations: ['profile', 'stateArchive'],
       });
@@ -213,7 +245,7 @@ export class ProfilesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Failed to get profile by EGN: ${error.message}`, error.stack);
+      this.logger.error(`Failed to get profile by EGN: ${error}`);
       throw new InternalServerErrorException({
         code: ProfileErrorCode.DATABASE_ERROR,
         message: ProfileErrorMessages[ProfileErrorCode.DATABASE_ERROR],

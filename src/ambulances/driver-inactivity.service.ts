@@ -13,11 +13,12 @@ export class DriverInactivityService {
     this.logger.log('Checking for inactive drivers...');
 
     try {
-      const removedDriverIds = await this.ambulancesService.removeInactiveDrivers(5);
+      const removedDriverIds =
+        await this.ambulancesService.removeInactiveDrivers(5);
 
       if (removedDriverIds.length > 0) {
         this.logger.log(
-          `Removed ${removedDriverIds.length} inactive driver(s) from their ambulances: ${removedDriverIds.join(', ')}`
+          `Removed ${removedDriverIds.length} inactive driver(s) from their ambulances: ${removedDriverIds.join(', ')}`,
         );
       } else {
         this.logger.log('No inactive drivers found');

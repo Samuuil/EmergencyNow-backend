@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client, TravelMode, DirectionsResponse } from '@googlemaps/google-maps-services-js';
+import { Client } from '@googlemaps/google-maps-services-js';
+import {
+  GoogleMapsRoutesResponse,
+  GoogleMapsDistanceMatrixResponse,
+  GoogleMapsPlacesResponse,
+} from '../types/google-maps.types';
 
 export interface Location {
   latitude: number;
@@ -72,7 +77,8 @@ export class GoogleMapsService {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
-          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
+          'X-Goog-FieldMask':
+            'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
         },
         body: JSON.stringify(requestBody),
       });
@@ -82,7 +88,7 @@ export class GoogleMapsService {
         throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GoogleMapsRoutesResponse;
 
       if (!data.routes || data.routes.length === 0) {
         throw new Error('No route found');
@@ -92,25 +98,26 @@ export class GoogleMapsService {
       const leg = route.legs?.[0];
 
       return {
-        distance: route.distanceMeters || 0,
-        duration: parseInt(route.duration?.replace('s', '') || '0'),
-        polyline: route.polyline?.encodedPolyline || '',
-        steps: leg?.steps?.map((step: any) => ({
-          distance: step.distanceMeters || 0,
-          duration: parseInt(step.staticDuration?.replace('s', '') || '0'),
-          instruction: step.navigationInstruction?.instructions || '',
-          startLocation: {
-            lat: step.startLocation?.latLng?.latitude || 0,
-            lng: step.startLocation?.latLng?.longitude || 0,
-          },
-          endLocation: {
-            lat: step.endLocation?.latLng?.latitude || 0,
-            lng: step.endLocation?.latLng?.longitude || 0,
-          },
-        })) || [],
+        distance: route.legs?.[0]?.distanceMeters || 0,
+        duration: parseInt(route.legs?.[0]?.duration?.replace('s', '') || '0'),
+        polyline: route.legs?.[0]?.polyline?.encodedPolyline || '',
+        steps:
+          leg?.steps?.map((step) => ({
+            distance: step.distanceMeters || 0,
+            duration: parseInt(step.staticDuration?.replace('s', '') || '0'),
+            instruction: step.navigationInstruction?.instructions || '',
+            startLocation: {
+              lat: step.startLocation?.latLng?.latitude || 0,
+              lng: step.startLocation?.latLng?.longitude || 0,
+            },
+            endLocation: {
+              lat: step.endLocation?.latLng?.latitude || 0,
+              lng: step.endLocation?.latLng?.longitude || 0,
+            },
+          })) || [],
       };
     } catch (error) {
-      this.logger.error(`Error calculating route: ${error.message}`, error.stack);
+      this.logger.error(`Error calculating route: ${error}`);
       throw error;
     }
   }
@@ -120,7 +127,8 @@ export class GoogleMapsService {
     destination: Location,
   ): Promise<DistanceMatrixResult> {
     try {
-      const url = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
+      const url =
+        'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
 
       const requestBody = {
         origins: [
@@ -156,7 +164,8 @@ export class GoogleMapsService {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
-          'X-Goog-FieldMask': 'originIndex,destinationIndex,duration,distanceMeters,status',
+          'X-Goog-FieldMask':
+            'originIndex,destinationIndex,duration,distanceMeters,status',
         },
         body: JSON.stringify(requestBody),
       });
@@ -166,7 +175,8 @@ export class GoogleMapsService {
         throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data =
+        (await response.json()) as GoogleMapsDistanceMatrixResponse[];
 
       if (!data || data.length === 0) {
         throw new Error('No distance data returned');
@@ -183,7 +193,7 @@ export class GoogleMapsService {
         duration: parseInt(element.duration?.replace('s', '') || '0'),
       };
     } catch (error) {
-      this.logger.error(`Error calculating distance: ${error.message}`, error.stack);
+      this.logger.error(`Error calculating distance: ${error}`);
       throw error;
     }
   }
@@ -193,7 +203,8 @@ export class GoogleMapsService {
     destinations: Location[],
   ): Promise<DistanceMatrixResult[]> {
     try {
-      const url = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
+      const url =
+        'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
 
       const requestBody = {
         origins: [
@@ -227,7 +238,8 @@ export class GoogleMapsService {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
-          'X-Goog-FieldMask': 'originIndex,destinationIndex,duration,distanceMeters,status',
+          'X-Goog-FieldMask':
+            'originIndex,destinationIndex,duration,distanceMeters,status',
         },
         body: JSON.stringify(requestBody),
       });
@@ -237,13 +249,17 @@ export class GoogleMapsService {
         throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data =
+        (await response.json()) as GoogleMapsDistanceMatrixResponse[];
 
       if (!data || data.length === 0) {
-        return destinations.map(() => ({ distance: Infinity, duration: Infinity }));
+        return destinations.map(() => ({
+          distance: Infinity,
+          duration: Infinity,
+        }));
       }
 
-      return data.map((element: any) => {
+      return data.map((element) => {
         if (element.status !== 'OK') {
           return { distance: Infinity, duration: Infinity };
         }
@@ -254,8 +270,7 @@ export class GoogleMapsService {
       });
     } catch (error) {
       this.logger.error(
-        `Error calculating distances to multiple destinations: ${error.message}`,
-        error.stack,
+        `Error calculating distances to multiple destinations: ${error}`,
       );
       throw error;
     }
@@ -275,8 +290,9 @@ export class GoogleMapsService {
     try {
       const url = 'https://places.googleapis.com/v1/places:searchText';
 
-      const latOffset = (radius / 111000);
-      const lngOffset = (radius / (111000 * Math.cos(location.latitude * Math.PI / 180)));
+      // Remove unused variables
+      // const latOffset = radius / 111000;
+      // const lngOffset = radius / (111000 * Math.cos((location.latitude * Math.PI) / 180));
 
       const requestBody = {
         textQuery: 'hospital',
@@ -297,7 +313,8 @@ export class GoogleMapsService {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
-          'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.id,places.types',
+          'X-Goog-FieldMask':
+            'places.displayName,places.formattedAddress,places.location,places.id,places.types',
         },
         body: JSON.stringify(requestBody),
       });
@@ -307,19 +324,23 @@ export class GoogleMapsService {
         throw new Error(`Places API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GoogleMapsPlacesResponse;
 
       if (!data.places || data.places.length === 0) {
         this.logger.warn('No hospitals found in the specified area');
         return [];
       }
 
-      const hospitals = data.places.filter((place: any) => {
+      const hospitals = data.places.filter((place) => {
         const types = place.types || [];
-        return types.includes('hospital') && !types.includes('doctor') && !types.includes('dentist');
+        return (
+          types.includes('hospital') &&
+          !types.includes('doctor') &&
+          !types.includes('dentist')
+        );
       });
 
-      return hospitals.map((place: any) => ({
+      return hospitals.map((place) => ({
         name: place.displayName?.text || 'Unknown Hospital',
         address: place.formattedAddress || '',
         location: {
@@ -329,11 +350,8 @@ export class GoogleMapsService {
         placeId: place.id || '',
       }));
     } catch (error) {
-      this.logger.error(`Error finding hospitals by text search: ${error.message}`, error.stack);
+      this.logger.error(`Error finding hospitals by text search: ${error}`);
       throw error;
     }
   }
-
-  
-
 }
