@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddDoctorRoleToUser1766922865000 implements MigrationInterface {
-  name = 'AddDoctorRoleToUser1766922865000'
+  name = 'AddDoctorRoleToUser1766922865000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DO $$
@@ -24,7 +24,5 @@ export class AddDoctorRoleToUser1766922865000 implements MigrationInterface {
     $$;`);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
-
-  }
+  public async down(_queryRunner: QueryRunner): Promise<void> {}
 }
