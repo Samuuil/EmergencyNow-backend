@@ -21,7 +21,6 @@ describe('UsersService', () => {
   const mockUser: User = {
     id: 'user-123',
     role: Role.USER,
-    refreshToken: undefined,
     profile: null as any,
     contacts: [],
     calls: [],
@@ -223,47 +222,6 @@ describe('UsersService', () => {
 
       await expect(
         service.findByStateArchiveId(stateArchiveId),
-      ).rejects.toThrow(InternalServerErrorException);
-    });
-  });
-
-  describe('updateRefreshToken', () => {
-    const userId = 'user-123';
-    const refreshToken = 'new-refresh-token';
-
-    it('should update refresh token', async () => {
-      repository.update.mockResolvedValue({
-        affected: 1,
-        raw: {},
-        generatedMaps: [],
-      });
-
-      await service.updateRefreshToken(userId, refreshToken);
-
-      expect(repository.update).toHaveBeenCalledWith(userId, {
-        refreshToken: refreshToken,
-      });
-    });
-
-    it('should set refresh token to undefined when null provided', async () => {
-      repository.update.mockResolvedValue({
-        affected: 1,
-        raw: {},
-        generatedMaps: [],
-      });
-
-      await service.updateRefreshToken(userId, null);
-
-      expect(repository.update).toHaveBeenCalledWith(userId, {
-        refreshToken: undefined,
-      });
-    });
-
-    it('should throw InternalServerErrorException on update error', async () => {
-      repository.update.mockRejectedValue(new Error('Update error'));
-
-      await expect(
-        service.updateRefreshToken(userId, refreshToken),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });

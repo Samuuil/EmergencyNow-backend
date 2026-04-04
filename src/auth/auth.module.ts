@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RefreshTokenStrategy } from './strategies/refresh-token.strategy';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/user.module';
@@ -31,6 +32,7 @@ import { VerificationCodeService } from './services/verification-code.service';
   providers: [
     AuthService,
     JwtStrategy,
+    RefreshTokenStrategy,
     MailService,
     SmsService,
     VerificationCodeService,

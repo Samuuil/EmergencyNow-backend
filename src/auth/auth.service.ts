@@ -13,7 +13,7 @@ import { VerificationCodeService } from './services/verification-code.service';
 import { InitiateLoginDto, LoginMethod } from './dto/initiate-login.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
 import { User } from '../users/entities/user.entity';
-import * as bcrypt from 'bcrypt';
+import { RedisService } from '../common/redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +25,7 @@ export class AuthService {
     private smsService: SmsService,
     private configService: ConfigService,
     private verificationCodeService: VerificationCodeService,
+    private redisService: RedisService,
   ) {}
 
   async initiateLogin(dto: InitiateLoginDto): Promise<{ message: string }> {
@@ -90,18 +91,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const user = await this.usersService.findOne(payload.sub);
+    const storedToken = await this.redisService.getRefreshToken(payload.sub);
 
-    if (!user || !user.refreshToken) {
+    if (!storedToken || storedToken !== oldRefreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const isTokenValid = await bcrypt.compare(
-      oldRefreshToken,
-      user.refreshToken,
-    );
+    const user = await this.usersService.findOne(payload.sub);
 
-    if (!isTokenValid) {
+    if (!user) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -132,17 +130,16 @@ export class AuthService {
       secret:
         this.configService.get<string>('JWT_REFRESH_SECRET') ||
         'defaultRefreshSecret',
-      expiresIn: '7d',
+      expiresIn: '30d',
     });
 
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.usersService.updateRefreshToken(user.id, hashedRefreshToken);
+    await this.redisService.addRefreshToken(user.id, refreshToken);
 
     return { accessToken, refreshToken };
   }
 
   async logout(userId: string): Promise<{ message: string }> {
-    await this.usersService.updateRefreshToken(userId, null);
+    await this.redisService.removeRefreshToken(userId);
     return { message: 'Logged out successfully' };
   }
 }

@@ -23,10 +23,6 @@ export class User {
   role: Role;
 
   @Exclude()
-  @Column({ type: 'varchar', nullable: true })
-  refreshToken?: string;
-
-  @Exclude()
   @OneToOne(() => Profile, (profile) => profile.user, { cascade: true })
   @JoinColumn()
   profile: Profile;

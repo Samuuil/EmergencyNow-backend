@@ -147,25 +147,6 @@ export class UsersService {
     }
   }
 
-  async updateRefreshToken(
-    userId: string,
-    refreshToken: string | null,
-  ): Promise<void> {
-    try {
-      await this.usersRepository.update(userId, {
-        refreshToken: refreshToken ?? undefined,
-      });
-    } catch (error) {
-      this.logger.error(
-        `${UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED,
-        message: UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED],
-      });
-    }
-  }
-
   async createWithExistingStateArchive(
     stateArchiveId: string,
     role?: Role,
