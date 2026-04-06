@@ -127,6 +127,10 @@ export class GoogleMapsService {
     destination: Location,
   ): Promise<DistanceMatrixResult> {
     try {
+      this.logger.debug(
+        `Calculating distance from (${origin.latitude}, ${origin.longitude}) to (${destination.latitude}, ${destination.longitude})`,
+      );
+
       const url =
         'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
 
@@ -157,6 +161,7 @@ export class GoogleMapsService {
         ],
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
+        units: 'METRIC',
       };
 
       const response = await fetch(url, {
@@ -165,7 +170,7 @@ export class GoogleMapsService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           'X-Goog-FieldMask':
-            'originIndex,destinationIndex,duration,distanceMeters,status,condition',
+            'originIndex,destinationIndex,duration,distanceMeters,status,condition,localizedValues',
         },
         body: JSON.stringify(requestBody),
       });
@@ -197,17 +202,53 @@ export class GoogleMapsService {
 
       const element = data[0];
 
-      if (element.status !== 'OK') {
+      // Check condition instead of status (Routes API v2 uses condition)
+      if (element.condition !== 'ROUTE_EXISTS') {
         this.logger.error(
-          `Route calculation failed. Element: ${JSON.stringify(element)}. Status: ${element.status}. Condition: ${element.condition || 'N/A'}`,
+          `Route calculation failed. Element: ${JSON.stringify(element)}. Condition: ${element.condition}`,
         );
         throw new Error(
-          `No route available: status=${element.status}, condition=${element.condition || 'N/A'}`,
+          `No route available: condition=${element.condition}`,
         );
       }
 
+      // If distanceMeters is missing, calculate straight-line distance as fallback
+      if (!element.distanceMeters || element.distanceMeters === 0) {
+        this.logger.warn(
+          `Distance meters missing or zero from response. Full element: ${JSON.stringify(element)}. Calculating straight-line distance as fallback.`,
+        );
+        
+        // Calculate Haversine distance as fallback
+        const R = 6371000; // Earth's radius in meters
+        const lat1 = (origin.latitude * Math.PI) / 180;
+        const lat2 = (destination.latitude * Math.PI) / 180;
+        const deltaLat = ((destination.latitude - origin.latitude) * Math.PI) / 180;
+        const deltaLon = ((destination.longitude - origin.longitude) * Math.PI) / 180;
+
+        const a =
+          Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+          Math.cos(lat1) *
+            Math.cos(lat2) *
+            Math.sin(deltaLon / 2) *
+            Math.sin(deltaLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const straightLineDistance = R * c;
+
+        // Estimate duration assuming 50 km/h average speed
+        const estimatedDuration = Math.round((straightLineDistance / 1000) * 72); // seconds
+
+        this.logger.warn(
+          `Using fallback: straight-line distance=${straightLineDistance}m, estimated duration=${estimatedDuration}s`,
+        );
+
+        return {
+          distance: Math.round(straightLineDistance),
+          duration: estimatedDuration,
+        };
+      }
+
       return {
-        distance: element.distanceMeters || 0,
+        distance: element.distanceMeters,
         duration: parseInt(element.duration?.replace('s', '') || '0'),
       };
     } catch (error) {
@@ -249,6 +290,7 @@ export class GoogleMapsService {
         })),
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
+        units: 'METRIC',
       };
 
       const response = await fetch(url, {
@@ -257,7 +299,7 @@ export class GoogleMapsService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           'X-Goog-FieldMask':
-            'originIndex,destinationIndex,duration,distanceMeters,status,condition',
+            'originIndex,destinationIndex,duration,distanceMeters,status,condition,localizedValues',
         },
         body: JSON.stringify(requestBody),
       });
@@ -278,11 +320,12 @@ export class GoogleMapsService {
       }
 
       return data.map((element) => {
-        if (element.status !== 'OK') {
+        // Check condition instead of status (Routes API v2 uses condition)
+        if (element.condition !== 'ROUTE_EXISTS' || !element.distanceMeters) {
           return { distance: Infinity, duration: Infinity };
         }
         return {
-          distance: element.distanceMeters || 0,
+          distance: element.distanceMeters,
           duration: parseInt(element.duration?.replace('s', '') || '0'),
         };
       });

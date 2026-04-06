@@ -43,11 +43,21 @@ export interface GoogleMapsDistanceMatrixElement {
 export interface GoogleMapsDistanceMatrixResponse {
   originIndex: number;
   destinationIndex: number;
-  status: string;
-  condition?: string;
+  status?: {
+    code?: number;
+    message?: string;
+  };
+  condition: string;
   distanceMeters?: number;
   duration?: string;
-  localizedValues?: any;
+  localizedValues?: {
+    distance?: {
+      text?: string;
+    };
+    duration?: {
+      text?: string;
+    };
+  };
 }
 
 export interface GoogleMapsPlace {
