@@ -165,27 +165,45 @@ export class GoogleMapsService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           'X-Goog-FieldMask':
-            'originIndex,destinationIndex,duration,distanceMeters,status',
+            'originIndex,destinationIndex,duration,distanceMeters,status,condition',
         },
         body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
+        this.logger.error(
+          `Routes API HTTP error: ${response.status} - ${errorText}`,
+        );
         throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
-      const data =
-        (await response.json()) as GoogleMapsDistanceMatrixResponse[];
+      const rawData = await response.json();
+      this.logger.debug(
+        `Distance Matrix API raw response: ${JSON.stringify(rawData)}`,
+      );
+
+      // The API returns an array in the root response
+      const data = Array.isArray(rawData)
+        ? rawData
+        : (rawData as any).data || [];
 
       if (!data || data.length === 0) {
+        this.logger.error(
+          `No distance data returned. Full response: ${JSON.stringify(rawData)}`,
+        );
         throw new Error('No distance data returned');
       }
 
       const element = data[0];
 
       if (element.status !== 'OK') {
-        throw new Error(`No route available: ${element.status}`);
+        this.logger.error(
+          `Route calculation failed. Element: ${JSON.stringify(element)}. Status: ${element.status}. Condition: ${element.condition || 'N/A'}`,
+        );
+        throw new Error(
+          `No route available: status=${element.status}, condition=${element.condition || 'N/A'}`,
+        );
       }
 
       return {
@@ -239,7 +257,7 @@ export class GoogleMapsService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           'X-Goog-FieldMask':
-            'originIndex,destinationIndex,duration,distanceMeters,status',
+            'originIndex,destinationIndex,duration,distanceMeters,status,condition',
         },
         body: JSON.stringify(requestBody),
       });

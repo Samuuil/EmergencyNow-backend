@@ -44,8 +44,10 @@ export interface GoogleMapsDistanceMatrixResponse {
   originIndex: number;
   destinationIndex: number;
   status: string;
-  distanceMeters: number;
-  duration: string;
+  condition?: string;
+  distanceMeters?: number;
+  duration?: string;
+  localizedValues?: any;
 }
 
 export interface GoogleMapsPlace {
