@@ -43,6 +43,10 @@ export class GoogleMapsService {
 
   async getRoute(origin: Location, destination: Location): Promise<RouteInfo> {
     try {
+      this.logger.debug(
+        `Calculating route from (${origin.latitude}, ${origin.longitude}) to (${destination.latitude}, ${destination.longitude})`,
+      );
+
       const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
       const requestBody = {
@@ -70,6 +74,7 @@ export class GoogleMapsService {
           avoidHighways: false,
           avoidFerries: false,
         },
+        units: 'METRIC',
       };
 
       const response = await fetch(url, {
@@ -78,43 +83,62 @@ export class GoogleMapsService {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': this.apiKey,
           'X-Goog-FieldMask':
-            'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
+            'routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.navigationInstruction.instructions,routes.legs.steps.startLocation.latLng,routes.legs.steps.endLocation.latLng',
         },
         body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
+        this.logger.error(
+          `Routes API HTTP error: ${response.status} - ${errorText}`,
+        );
         throw new Error(`Routes API error: ${response.status} - ${errorText}`);
       }
 
       const data = (await response.json()) as GoogleMapsRoutesResponse;
 
+      this.logger.debug(
+        `Routes API response: ${JSON.stringify(data).substring(0, 500)}...`,
+      );
+
       if (!data.routes || data.routes.length === 0) {
+        this.logger.error('No routes found in response');
         throw new Error('No route found');
       }
 
       const route = data.routes[0];
       const leg = route.legs?.[0];
 
+      if (!leg) {
+        this.logger.error('No legs found in route');
+        throw new Error('No route legs found');
+      }
+
+      const polyline = leg.polyline?.encodedPolyline || '';
+      const steps = leg.steps || [];
+
+      this.logger.debug(
+        `Route calculated: distance=${leg.distanceMeters}m, duration=${leg.duration}, polyline length=${polyline.length}, steps count=${steps.length}`,
+      );
+
       return {
-        distance: route.legs?.[0]?.distanceMeters || 0,
-        duration: parseInt(route.legs?.[0]?.duration?.replace('s', '') || '0'),
-        polyline: route.legs?.[0]?.polyline?.encodedPolyline || '',
-        steps:
-          leg?.steps?.map((step) => ({
-            distance: step.distanceMeters || 0,
-            duration: parseInt(step.staticDuration?.replace('s', '') || '0'),
-            instruction: step.navigationInstruction?.instructions || '',
-            startLocation: {
-              lat: step.startLocation?.latLng?.latitude || 0,
-              lng: step.startLocation?.latLng?.longitude || 0,
-            },
-            endLocation: {
-              lat: step.endLocation?.latLng?.latitude || 0,
-              lng: step.endLocation?.latLng?.longitude || 0,
-            },
-          })) || [],
+        distance: leg.distanceMeters || 0,
+        duration: parseInt(leg.duration?.replace('s', '') || '0'),
+        polyline: polyline,
+        steps: steps.map((step) => ({
+          distance: step.distanceMeters || 0,
+          duration: parseInt(step.staticDuration?.replace('s', '') || '0'),
+          instruction: step.navigationInstruction?.instructions || '',
+          startLocation: {
+            lat: step.startLocation?.latLng?.latitude || 0,
+            lng: step.startLocation?.latLng?.longitude || 0,
+          },
+          endLocation: {
+            lat: step.endLocation?.latLng?.latitude || 0,
+            lng: step.endLocation?.latLng?.longitude || 0,
+          },
+        })),
       };
     } catch (error) {
       this.logger.error(`Error calculating route: ${error}`);
