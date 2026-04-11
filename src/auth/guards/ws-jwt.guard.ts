@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { WsClient, JwtPayload } from '../types/ws.types';
+import { extractWsToken } from '../../realtime/extract-ws-token.util';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
@@ -52,21 +53,6 @@ export class WsJwtGuard implements CanActivate {
   }
 
   private extractToken(client: WsClient): string | null {
-    const headers = client.handshake?.headers as
-      | Record<string, string>
-      | undefined;
-
-    const authHeader = headers?.authorization || headers?.Authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.slice(7);
-    }
-
-    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
-    if (tokenFromAuth) return tokenFromAuth;
-
-    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
-    if (tokenFromQuery) return tokenFromQuery;
-
-    return null;
+    return extractWsToken(client);
   }
 }

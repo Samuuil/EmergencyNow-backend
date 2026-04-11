@@ -182,21 +182,14 @@ export class UsersService {
   }
 
   async findUserRole(userId: string): Promise<string> {
-    try {
-      const user = await this.findOne(userId);
-      return user.role;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(
-        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: UserErrorCode.DATABASE_ERROR,
-        message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
-      });
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'role'],
+    });
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
     }
+    return user.role;
   }
 
   async exists(id: string): Promise<boolean> {

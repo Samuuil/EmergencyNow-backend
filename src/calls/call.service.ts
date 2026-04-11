@@ -75,11 +75,11 @@ export class CallsService {
     try {
       await this.proposeToNearestDriver(savedCall.id);
     } catch (error) {
-      console.error('Failed to propose call to driver:', error);
+      this.logger.error('Failed to propose call to driver:', error);
     }
 
     this.notifyEmergencyContactsAboutCall(fullUser, savedCall).catch((err) =>
-      console.error('Failed to notify emergency contacts:', err),
+      this.logger.error('Failed to notify emergency contacts:', err),
     );
 
     return this.findOne(savedCall.id);
@@ -197,7 +197,7 @@ export class CallsService {
       distance = res.distance;
       duration = res.duration;
     } catch (error) {
-      console.error(
+      this.logger.error(
         'getDistanceAndDuration failed, sending offer without ETA:',
         error,
       );
@@ -527,7 +527,7 @@ export class CallsService {
       hospital.name,
       route.duration,
     ).catch((err) =>
-      console.error('Failed to notify emergency contacts about hospital:', err),
+      this.logger.error('Failed to notify emergency contacts about hospital:', err),
     );
 
     return savedCall;
@@ -571,7 +571,7 @@ export class CallsService {
     const contacts = await this.contactsService.getUserContactsList(user.id);
 
     if (contacts.length === 0) {
-      console.log(`No emergency contacts found for user ${user.id}`);
+      this.logger.log(`No emergency contacts found for user ${user.id}`);
       return;
     }
 
@@ -608,7 +608,7 @@ export class CallsService {
 
     await Promise.all([...emailPromises, ...smsPromises]);
 
-    console.log(
+    this.logger.log(
       `Emergency alerts sent to ${emailPromises.length} email(s) and ${smsPromises.length} SMS(s) for user ${user.id}`,
     );
   }
@@ -619,7 +619,7 @@ export class CallsService {
     estimatedDuration?: number,
   ): Promise<void> {
     if (!call.user) {
-      console.log(
+      this.logger.log(
         `No user associated with call ${call.id}, skipping hospital notification`,
       );
       return;
@@ -630,7 +630,7 @@ export class CallsService {
     );
 
     if (contacts.length === 0) {
-      console.log(`No emergency contacts found for user ${call.user.id}`);
+      this.logger.log(`No emergency contacts found for user ${call.user.id}`);
       return;
     }
 
@@ -656,7 +656,7 @@ export class CallsService {
 
     await Promise.all(emailPromises);
 
-    console.log(
+    this.logger.log(
       `Hospital updates sent to ${emailPromises.length} contact(s) for user ${call.user.id}`,
     );
   }
