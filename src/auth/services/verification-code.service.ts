@@ -73,13 +73,19 @@ export class VerificationCodeService {
 
     const emailParsed = tryParse(emailData);
     if (emailParsed && emailParsed.code === normCode) {
-      await this.redisService.del(emailKey);
+      const consumed = await this.redisService.getdel(emailKey);
+      if (!consumed) {
+        throw new UnauthorizedException('Invalid or expired verification code');
+      }
       return emailParsed;
     }
 
     const smsParsed = tryParse(smsData);
     if (smsParsed && smsParsed.code === normCode) {
-      await this.redisService.del(smsKey);
+      const consumed = await this.redisService.getdel(smsKey);
+      if (!consumed) {
+        throw new UnauthorizedException('Invalid or expired verification code');
+      }
       return smsParsed;
     }
 

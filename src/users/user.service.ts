@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { User } from './entities/user.entity';
 import { Profile } from '../profiles/entities/profile.entity';
@@ -13,6 +13,8 @@ import { CreateUserDto } from './dto/createUser.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { Role } from '../common/enums/role.enum';
 import { UserErrorCode, UserErrorMessages } from './errors/user-errors.enum';
+
+const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class UsersService {
@@ -159,6 +161,16 @@ export class UsersService {
       });
       return await this.usersRepository.save(user);
     } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error as any).code === PG_UNIQUE_VIOLATION
+      ) {
+        const existing = await this.usersRepository.findOne({
+          where: { stateArchive: { id: stateArchiveId } },
+          relations: ['stateArchive', 'profile'],
+        });
+        if (existing) return existing;
+      }
       this.logger.error(
         `${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error}`,
       );
