@@ -85,7 +85,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.user = {
         id: payload.sub,
         role: payload.role,
-        egn: payload.egn,
       };
 
       this.driverSockets.set(payload.sub, client.id);

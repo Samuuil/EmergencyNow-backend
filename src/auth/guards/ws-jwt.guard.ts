@@ -40,7 +40,6 @@ export class WsJwtGuard implements CanActivate {
       client.user = {
         id: payload.sub,
         role: payload.role,
-        egn: payload.egn,
       };
 
       this.logger.log(`WS Auth success: User ${payload.sub} authenticated`);

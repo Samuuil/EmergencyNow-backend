@@ -51,7 +51,6 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.user = {
         id: payload.sub,
         role: payload.role,
-        egn: payload.egn,
       };
 
       this.userSockets.set(payload.sub, client.id);

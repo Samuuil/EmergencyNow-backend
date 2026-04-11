@@ -87,7 +87,6 @@ describe('DriverGateway', () => {
       const mockPayload = {
         sub: 'driver-123',
         role: 'DRIVER',
-        egn: '1234567890',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -104,7 +103,6 @@ describe('DriverGateway', () => {
       expect(client.user).toEqual({
         id: 'driver-123',
         role: 'DRIVER',
-        egn: '1234567890',
       });
       expect(gateway.isDriverOnline('driver-123')).toBe(true);
       expect(client.disconnect).not.toHaveBeenCalled();
