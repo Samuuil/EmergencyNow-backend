@@ -22,7 +22,6 @@ import type { DriverSocket, JwtPayload } from './driver.types';
   cors: { origin: true, credentials: true },
   allowEIO3: true,
 })
-@UseGuards(WsJwtGuard)
 export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -42,18 +41,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     number,
     {
       driverIdToAmbulanceId: Map<string, string>;
-      collected: Array<{
-        ambulanceId: string;
-        latitude: number;
-        longitude: number;
-      }>;
-      resolve: (
-        value: Array<{
-          ambulanceId: string;
-          latitude: number;
-          longitude: number;
-        }>,
-      ) => void;
+      respondedAmbulanceIds: Set<string>;
     }
   >();
 
@@ -106,6 +94,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('call.respond')
   async onDriverRespond(
     @ConnectedSocket() client: DriverSocket,
@@ -121,6 +110,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('location.response')
   async onLocationResponse(
     @ConnectedSocket() client: DriverSocket,
@@ -136,13 +126,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const ambulanceId = pending.driverIdToAmbulanceId.get(driverId);
     if (!ambulanceId) return;
 
-    if (!pending.collected.some((c) => c.ambulanceId === ambulanceId)) {
-      pending.collected.push({
-        ambulanceId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-      });
-
+    if (!pending.respondedAmbulanceIds.has(ambulanceId)) {
+      pending.respondedAmbulanceIds.add(ambulanceId);
       await this.ambulancesService.updateLocation(
         ambulanceId,
         data.latitude,
@@ -151,6 +136,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('location.update')
   async onLocationUpdate(
     @ConnectedSocket() client: DriverSocket,
@@ -282,7 +268,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return null;
   }
 
-  async refreshAvailableAmbulanceLocations(timeoutMs = 5000): Promise<void> {
+  async refreshAvailableAmbulanceLocations(): Promise<void> {
     const driverIdToAmbulanceId =
       await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
@@ -298,41 +284,17 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const requestId = ++this.locationRequestId;
-
-    const collectedLocations = await new Promise<
-      Array<{ ambulanceId: string; latitude: number; longitude: number }>
-    >((resolve) => {
-      const pendingEntry = {
-        driverIdToAmbulanceId,
-        collected: [] as Array<{
-          ambulanceId: string;
-          latitude: number;
-          longitude: number;
-        }>,
-        resolve,
-      };
-      this.pendingLocationRequests.set(requestId, pendingEntry);
-
-      for (const driverId of onlineDriverIds) {
-        this.emitToDriver(driverId, 'location.request', {
-          requestId,
-        });
-      }
-
-      setTimeout(() => {
-        const entry = this.pendingLocationRequests.get(requestId);
-        this.pendingLocationRequests.delete(requestId);
-        resolve(entry?.collected ?? []);
-      }, timeoutMs);
+    this.pendingLocationRequests.set(requestId, {
+      driverIdToAmbulanceId,
+      respondedAmbulanceIds: new Set(),
     });
 
-    if (collectedLocations.length > 0) {
-      this.logger.log(
-        `Collected ${collectedLocations.length} location(s) from drivers; updating DB`,
-      );
-      await this.ambulancesService.bulkUpdateLocations(collectedLocations);
-    } else {
-      this.logger.warn('No location responses received from drivers');
+    for (const driverId of onlineDriverIds) {
+      this.emitToDriver(driverId, 'location.request', { requestId });
     }
+
+    setTimeout(() => {
+      this.pendingLocationRequests.delete(requestId);
+    }, 10000);
   }
 }

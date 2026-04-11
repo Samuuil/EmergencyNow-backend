@@ -28,21 +28,6 @@ export class ContactsService {
     private readonly usersService: UsersService,
   ) {}
 
-  async create(dto: CreateContactDto): Promise<Contact> {
-    try {
-      const contact = this.contactsRepository.create(dto);
-      return await this.contactsRepository.save(contact);
-    } catch (error) {
-      this.logger.error(
-        `${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: ContactErrorCode.CONTACT_CREATION_FAILED,
-        message: ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED],
-      });
-    }
-  }
-
   async findAll(query: PaginateQuery) {
     try {
       return paginate(query, this.contactsRepository, {

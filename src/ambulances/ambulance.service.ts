@@ -277,51 +277,6 @@ export class AmbulancesService {
     );
   }
 
-  async findNearestAvailableAmbulance(
-    location: Location,
-  ): Promise<AmbulanceWithDistance | null> {
-    const availableAmbulances = await this.findAvailableList();
-
-    if (availableAmbulances.length === 0) {
-      return null;
-    }
-
-    const ambulancesWithLocation = availableAmbulances.filter(
-      (amb) => amb.latitude != null && amb.longitude != null,
-    );
-
-    if (ambulancesWithLocation.length === 0) {
-      return null;
-    }
-
-    const ambulanceLocations = ambulancesWithLocation.map((amb) => ({
-      latitude: amb.latitude,
-      longitude: amb.longitude,
-    }));
-
-    const distances =
-      await this.googleMapsService.getDistancesToMultipleDestinations(
-        location,
-        ambulanceLocations,
-      );
-
-    let minIndex = 0;
-    let minDuration = distances[0].duration;
-
-    for (let i = 1; i < distances.length; i++) {
-      if (distances[i].duration < minDuration) {
-        minDuration = distances[i].duration;
-        minIndex = i;
-      }
-    }
-
-    return {
-      ...ambulancesWithLocation[minIndex],
-      distance: distances[minIndex].distance,
-      duration: distances[minIndex].duration,
-    };
-  }
-
   async findNearestAvailableAmbulanceExcluding(
     location: Location,
     excludeAmbulanceIds: string[] = [],

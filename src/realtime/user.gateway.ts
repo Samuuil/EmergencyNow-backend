@@ -4,9 +4,8 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { UseGuards, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server } from 'socket.io';
-import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
@@ -17,7 +16,6 @@ import type { UserSocket, JwtPayload } from './user.types';
   cors: { origin: true, credentials: true },
   allowEIO3: true,
 })
-@UseGuards(WsJwtGuard)
 export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;

@@ -363,53 +363,61 @@ describe('DriverGateway', () => {
   });
 
   describe('refreshAvailableAmbulanceLocations', () => {
-    it('should request and collect locations from online drivers', async () => {
-      const mockPayload = {
-        sub: 'driver-123',
-        role: 'DRIVER',
-        egn: '1234567890',
-      };
-
+    it('should broadcast location.request to online drivers and return immediately', async () => {
+      const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
       configService.get.mockReturnValue('test-secret');
       jwtService.verify.mockReturnValue(mockPayload);
 
       const client: DriverSocket = {
         id: 'socket-123',
-        handshake: {
-          headers: { authorization: 'Bearer valid-token' },
-        },
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
 
       const driverMap = new Map([['driver-123', 'amb-123']]);
-      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
-        driverMap,
-      );
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
       ambulancesService.updateLocation.mockResolvedValue({} as any);
-      ambulancesService.bulkUpdateLocations.mockResolvedValue();
 
-      // Start the location refresh
-      const locationPromise = gateway.refreshAvailableAmbulanceLocations(100);
+      await gateway.refreshAvailableAmbulanceLocations();
 
-      // Wait a bit for the request to be sent
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.emit).toHaveBeenCalledWith(
+        'location.request',
+        expect.objectContaining({ requestId: 1 }),
+      );
+    });
 
-      // Simulate driver responding to location request
+    it('should update DB when driver responds to location.request', async () => {
+      const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
+      configService.get.mockReturnValue('test-secret');
+      jwtService.verify.mockReturnValue(mockPayload);
+
+      const client: DriverSocket = {
+        id: 'socket-123',
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
+        disconnect: jest.fn(),
+      } as any;
+
+      gateway.handleConnection(client);
+
+      const driverMap = new Map([['driver-123', 'amb-123']]);
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
+      ambulancesService.updateLocation.mockResolvedValue({} as any);
+
+      await gateway.refreshAvailableAmbulanceLocations();
+
       await gateway.onLocationResponse(client, {
         requestId: 1,
         latitude: 42.7,
         longitude: 23.3,
       });
 
-      await locationPromise;
-
-      expect(mockServer.emit).toHaveBeenCalledWith(
-        'location.request',
-        expect.objectContaining({
-          requestId: 1,
-        }),
+      expect(ambulancesService.updateLocation).toHaveBeenCalledWith(
+        'amb-123',
+        42.7,
+        23.3,
       );
     });
 
@@ -418,7 +426,7 @@ describe('DriverGateway', () => {
         new Map(),
       );
 
-      await gateway.refreshAvailableAmbulanceLocations(100);
+      await gateway.refreshAvailableAmbulanceLocations();
 
       expect(mockServer.emit).not.toHaveBeenCalled();
     });

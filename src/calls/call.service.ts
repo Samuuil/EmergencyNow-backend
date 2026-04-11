@@ -145,11 +145,9 @@ export class CallsService {
     if (!call) return;
 
     if (!skipLocationRefresh) {
-      try {
-        await this.driverGateway.refreshAvailableAmbulanceLocations(5000);
-      } catch (error) {
-        console.error('Failed to refresh ambulance locations:', error);
-      }
+      this.driverGateway.refreshAvailableAmbulanceLocations().catch((error) =>
+        this.logger.error('Failed to broadcast location requests:', error),
+      );
     }
 
     const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
