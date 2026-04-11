@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('ambulances')
 export class Ambulance {
@@ -19,6 +26,10 @@ export class Ambulance {
 
   @Column({ default: true })
   available: boolean;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'driverId' })
+  driver: User | null;
 
   @Column({ type: 'uuid', nullable: true })
   driverId: string | null;

@@ -2,9 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  Inject,
-  forwardRef,
+  Logger,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -12,8 +12,8 @@ import { Call } from './entities/call.entity';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
 import { User } from '../users/entities/user.entity';
-import { Ambulance } from '../ambulances/entities/ambulance.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
+import { UsersService } from '../users/user.service';
 import {
   HospitalsService,
   HospitalWithDistance,
@@ -26,21 +26,30 @@ import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 
+interface DriverRespondedEvent {
+  callId: string;
+  driverId: string;
+  accept: boolean;
+}
+
+interface DriverLocationUpdatedEvent {
+  callId: string;
+  latitude: number;
+  longitude: number;
+  driverId: string;
+}
+
 @Injectable()
 export class CallsService {
+  private readonly logger = new Logger(CallsService.name);
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(Ambulance)
-    private readonly ambulanceRepository: Repository<Ambulance>,
+    private readonly usersService: UsersService,
     private readonly ambulancesService: AmbulancesService,
     private readonly hospitalsService: HospitalsService,
     private readonly googleMapsService: GoogleMapsService,
-    @Inject(forwardRef(() => DriverGateway))
     private readonly driverGateway: DriverGateway,
-    @Inject(forwardRef(() => UserGateway))
     private readonly userGateway: UserGateway,
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
@@ -48,14 +57,16 @@ export class CallsService {
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
-    if (!user) throw new BadRequestException('User not found');
+    const fullUser = await this.usersService.findByIdWithStateArchive(user.id);
+
+    if (!fullUser) throw new BadRequestException('User not found');
 
     const call = this.callsRepository.create({
       description: dto.description,
       latitude: dto.latitude,
       longitude: dto.longitude,
-      user,
-      userEgn: dto.userEgn,
+      user: fullUser,
+      userEgn: fullUser.stateArchive?.egn ?? null,
       status: CallStatus.PENDING,
     });
 
@@ -64,14 +75,50 @@ export class CallsService {
     try {
       await this.proposeToNearestDriver(savedCall.id);
     } catch (error) {
-      console.error('Failed to propose call to driver:', error);
+      this.logger.error('Failed to propose call to driver:', error);
     }
 
-    this.notifyEmergencyContactsAboutCall(user, savedCall).catch((err) =>
-      console.error('Failed to notify emergency contacts:', err),
+    this.notifyEmergencyContactsAboutCall(fullUser, savedCall).catch((err) =>
+      this.logger.error('Failed to notify emergency contacts:', err),
     );
 
     return this.findOne(savedCall.id);
+  }
+
+  @OnEvent('driver.responded')
+  async onDriverResponded(event: DriverRespondedEvent): Promise<void> {
+    try {
+      await this.handleDriverResponse(event.callId, event.driverId, event.accept);
+    } catch (e) {
+      this.logger.error(`Failed to handle driver.responded event`, e);
+    }
+  }
+
+  @OnEvent('driver.location.updated')
+  async onDriverLocationUpdated(event: DriverLocationUpdatedEvent): Promise<void> {
+    try {
+      const call = await this.updateAmbulanceLocation(
+        event.callId,
+        event.latitude,
+        event.longitude,
+      );
+      this.logger.log(
+        `[driver.location.updated] Updated call ${call.id}, userId=${call.user?.id}`,
+      );
+      if (call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
+        this.driverGateway.sendRouteToDriver(event.driverId, {
+          callId: call.id,
+          route: {
+            polyline: call.routePolyline,
+            distance: call.estimatedDistance,
+            duration: call.estimatedDuration,
+            steps: call.routeSteps || [],
+          },
+        });
+      }
+    } catch (e) {
+      this.logger.error(`Failed to handle driver.location.updated event`, e);
+    }
   }
 
   async dispatchNearestAmbulance(callId: string): Promise<Call> {
@@ -98,73 +145,43 @@ export class CallsService {
     if (!call) return;
 
     if (!skipLocationRefresh) {
-      try {
-        await this.driverGateway.refreshAvailableAmbulanceLocations(5000);
-      } catch (error) {
-        console.error('Failed to refresh ambulance locations:', error);
-      }
+      this.driverGateway.refreshAvailableAmbulanceLocations().catch((error) =>
+        this.logger.error('Failed to broadcast location requests:', error),
+      );
     }
 
-    const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
+    const excludedIds = new Set(
+      this.driverGateway.getRejectedAmbulanceIds(callId),
+    );
 
     if (call.user?.stateArchive?.egn) {
-      const callerEgn = call.user.stateArchive.egn;
-
-      const ambulancesWithMatchingDriverEgn = await this.ambulanceRepository
-        .createQueryBuilder('ambulance')
-        .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
-        .innerJoin('driver.stateArchive', 'stateArchive')
-        .where('ambulance.available = :available', { available: true })
-        .andWhere('ambulance.driverId IS NOT NULL')
-        .andWhere('stateArchive.egn = :callerEgn', { callerEgn })
-        .select('ambulance.id')
-        .getMany();
-
-      ambulancesWithMatchingDriverEgn.forEach((amb) => {
-        excluded.push(amb.id);
-      });
-    }
-
-    let candidate =
-      await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
-        { latitude: call.latitude, longitude: call.longitude },
-        excluded,
-      );
-
-    while (
-      candidate &&
-      (!candidate.driverId ||
-        !this.driverGateway.isDriverOnline(candidate.driverId))
-    ) {
-      excluded.push(candidate.id);
-      candidate =
-        await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
-          { latitude: call.latitude, longitude: call.longitude },
-          excluded,
+      const ambulancesWithMatchingDriverEgn =
+        await this.ambulancesService.findAvailableWithDriverEgn(
+          call.user.stateArchive.egn,
         );
+      ambulancesWithMatchingDriverEgn.forEach((amb) => excludedIds.add(amb.id));
     }
+
+    const allAvailable = await this.ambulancesService.findAvailableList();
+    const candidates = allAvailable.filter(
+      (amb) =>
+        amb.latitude != null &&
+        amb.longitude != null &&
+        !excludedIds.has(amb.id) &&
+        amb.driverId != null &&
+        this.driverGateway.isDriverOnline(amb.driverId),
+    );
+
+    const candidate = await this.ambulancesService.findNearestFromList(
+      candidates,
+      { latitude: call.latitude, longitude: call.longitude },
+    );
 
     if (!candidate) {
       return;
     }
 
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
-
-    let distance = 0;
-    let duration = 0;
-    try {
-      const res = await this.googleMapsService.getDistanceAndDuration(
-        { latitude: candidate.latitude, longitude: candidate.longitude },
-        { latitude: call.latitude, longitude: call.longitude },
-      );
-      distance = res.distance;
-      duration = res.duration;
-    } catch (error) {
-      console.error(
-        'getDistanceAndDuration failed, sending offer without ETA:',
-        error,
-      );
-    }
 
     this.driverGateway.offerCall({
       callId: call.id,
@@ -173,8 +190,8 @@ export class CallsService {
       longitude: call.longitude,
       ambulanceId: candidate.id,
       driverId: candidate.driverId!,
-      distance,
-      duration,
+      distance: candidate.distance,
+      duration: candidate.duration,
     });
   }
 
@@ -490,7 +507,7 @@ export class CallsService {
       hospital.name,
       route.duration,
     ).catch((err) =>
-      console.error('Failed to notify emergency contacts about hospital:', err),
+      this.logger.error('Failed to notify emergency contacts about hospital:', err),
     );
 
     return savedCall;
@@ -534,17 +551,13 @@ export class CallsService {
     const contacts = await this.contactsService.getUserContactsList(user.id);
 
     if (contacts.length === 0) {
-      console.log(`No emergency contacts found for user ${user.id}`);
+      this.logger.log(`No emergency contacts found for user ${user.id}`);
       return;
     }
 
-    const fullUser = await this.userRepository.findOne({
-      where: { id: user.id },
-      relations: ['stateArchive'],
-    });
     const userName =
-      fullUser?.stateArchive?.fullName ||
-      fullUser?.stateArchive?.email ||
+      user.stateArchive?.fullName ||
+      user.stateArchive?.email ||
       'A user';
 
     const emailPromises = contacts
@@ -575,7 +588,7 @@ export class CallsService {
 
     await Promise.all([...emailPromises, ...smsPromises]);
 
-    console.log(
+    this.logger.log(
       `Emergency alerts sent to ${emailPromises.length} email(s) and ${smsPromises.length} SMS(s) for user ${user.id}`,
     );
   }
@@ -586,7 +599,7 @@ export class CallsService {
     estimatedDuration?: number,
   ): Promise<void> {
     if (!call.user) {
-      console.log(
+      this.logger.log(
         `No user associated with call ${call.id}, skipping hospital notification`,
       );
       return;
@@ -597,17 +610,16 @@ export class CallsService {
     );
 
     if (contacts.length === 0) {
-      console.log(`No emergency contacts found for user ${call.user.id}`);
+      this.logger.log(`No emergency contacts found for user ${call.user.id}`);
       return;
     }
 
-    const fullUser = await this.userRepository.findOne({
-      where: { id: call.user.id },
-      relations: ['stateArchive'],
-    });
+    const hospitalUser = await this.usersService.findByIdWithStateArchive(
+      call.user.id,
+    );
     const userName =
-      fullUser?.stateArchive?.fullName ||
-      fullUser?.stateArchive?.email ||
+      hospitalUser?.stateArchive?.fullName ||
+      hospitalUser?.stateArchive?.email ||
       'Your contact';
 
     const emailPromises = contacts
@@ -624,7 +636,7 @@ export class CallsService {
 
     await Promise.all(emailPromises);
 
-    console.log(
+    this.logger.log(
       `Hospital updates sent to ${emailPromises.length} contact(s) for user ${call.user.id}`,
     );
   }

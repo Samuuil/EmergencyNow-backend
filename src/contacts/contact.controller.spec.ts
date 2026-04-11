@@ -19,7 +19,6 @@ describe('ContactsController', () => {
 
   const mockUser: AuthenticatedUser = {
     id: '123e4567-e89b-12d3-a456-426614174001',
-    email: 'test@example.com',
     role: 'user' as any,
   };
 
@@ -158,23 +157,6 @@ describe('ContactsController', () => {
         mockUser.id,
         contactId,
       );
-    });
-  });
-
-  describe('create (Admin)', () => {
-    const createContactDto = {
-      name: 'John Doe',
-      phoneNumber: '+1234567890',
-      email: 'john@example.com',
-    };
-
-    it('should create a contact (admin only)', async () => {
-      service.create.mockResolvedValue(mockContact);
-
-      const result = await controller.create(createContactDto);
-
-      expect(result).toEqual(mockContact);
-      expect(service.create).toHaveBeenCalledWith(createContactDto);
     });
   });
 

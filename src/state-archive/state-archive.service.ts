@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -18,6 +18,8 @@ import {
   StateArchiveErrorCode,
   StateArchiveErrorMessages,
 } from './errors/state-archive-errors.enum';
+
+const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class StateArchiveService {
@@ -223,8 +225,23 @@ export class StateArchiveService {
           phoneNumber: externalData.phoneNumber,
         });
 
-        archive = await this.archiveRepo.save(archive);
-        this.logger.log(`Saved state archive data for EGN: ${egn}`);
+        try {
+          archive = await this.archiveRepo.save(archive);
+          this.logger.log(`Saved state archive data for EGN: ${egn}`);
+        } catch (saveError) {
+          if (
+            saveError instanceof QueryFailedError &&
+            (saveError as any).code === PG_UNIQUE_VIOLATION
+          ) {
+            this.logger.warn(
+              `Concurrent insert for EGN ${egn}; re-fetching existing record`,
+            );
+            archive = await this.archiveRepo.findOne({ where: { egn } });
+            if (!archive) throw saveError;
+          } else {
+            throw saveError;
+          }
+        }
 
         return archive;
       } catch (httpError) {

@@ -10,9 +10,7 @@ import { SmsService } from './services/sms.service';
 import { VerificationCodeService } from './services/verification-code.service';
 import { InitiateLoginDto, LoginMethod } from './dto/initiate-login.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
-import * as bcrypt from 'bcrypt';
-
-jest.mock('bcrypt');
+import { RedisService } from '../common/redis/redis.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -23,12 +21,12 @@ describe('AuthService', () => {
   let smsService: jest.Mocked<SmsService>;
   let configService: jest.Mocked<ConfigService>;
   let verificationCodeService: jest.Mocked<VerificationCodeService>;
+  let redisService: jest.Mocked<RedisService>;
 
   const mockUsersService = {
     findByStateArchiveId: jest.fn(),
     createWithExistingStateArchive: jest.fn(),
     findOne: jest.fn(),
-    updateRefreshToken: jest.fn(),
   };
 
   const mockStateArchiveService = {
@@ -58,6 +56,12 @@ describe('AuthService', () => {
     verifyAndConsumeCode: jest.fn(),
   };
 
+  const mockRedisService = {
+    addRefreshToken: jest.fn(),
+    getRefreshToken: jest.fn(),
+    removeRefreshToken: jest.fn(),
+  };
+
   const mockStateArchive = {
     id: 'archive-123',
     egn: '1234567890',
@@ -69,7 +73,6 @@ describe('AuthService', () => {
   const mockUser = {
     id: 'user-123',
     role: 'USER',
-    refreshToken: undefined,
     stateArchive: mockStateArchive,
   };
 
@@ -105,6 +108,10 @@ describe('AuthService', () => {
           provide: VerificationCodeService,
           useValue: mockVerificationCodeService,
         },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
       ],
     }).compile();
 
@@ -116,10 +123,9 @@ describe('AuthService', () => {
     smsService = module.get(SmsService);
     configService = module.get(ConfigService);
     verificationCodeService = module.get(VerificationCodeService);
+    redisService = module.get(RedisService);
 
     jest.clearAllMocks();
-    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-token');
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
   });
 
   it('should be defined', () => {
@@ -210,7 +216,7 @@ describe('AuthService', () => {
         .mockReturnValueOnce('access-token')
         .mockReturnValueOnce('refresh-token');
       configService.get.mockReturnValue('test-secret');
-      usersService.updateRefreshToken.mockResolvedValue();
+      redisService.addRefreshToken.mockResolvedValue('refresh-token');
 
       const result = await service.verifyCode(verifyCodeDto);
 
@@ -242,7 +248,7 @@ describe('AuthService', () => {
         .mockReturnValueOnce('access-token')
         .mockReturnValueOnce('refresh-token');
       configService.get.mockReturnValue('test-secret');
-      usersService.updateRefreshToken.mockResolvedValue();
+      redisService.addRefreshToken.mockResolvedValue('refresh-token');
 
       const result = await service.verifyCode(verifyCodeDto);
 
@@ -274,16 +280,13 @@ describe('AuthService', () => {
 
     it('should refresh tokens successfully', async () => {
       jwtService.verify.mockReturnValue({ sub: 'user-123' });
-      usersService.findOne.mockResolvedValue({
-        ...mockUser,
-        refreshToken: 'hashed-token',
-      } as any);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      redisService.getRefreshToken.mockResolvedValue('old-refresh-token');
+      usersService.findOne.mockResolvedValue(mockUser as any);
       jwtService.sign
         .mockReturnValueOnce('new-access-token')
         .mockReturnValueOnce('new-refresh-token');
       configService.get.mockReturnValue('test-secret');
-      usersService.updateRefreshToken.mockResolvedValue();
+      redisService.addRefreshToken.mockResolvedValue('new-refresh-token');
 
       const result = await service.refreshToken(oldRefreshToken);
 
@@ -294,6 +297,7 @@ describe('AuthService', () => {
       expect(jwtService.verify).toHaveBeenCalledWith(oldRefreshToken, {
         secret: 'test-secret',
       });
+      expect(redisService.getRefreshToken).toHaveBeenCalledWith('user-123');
     });
 
     it('should throw UnauthorizedException when token is invalid', async () => {
@@ -309,21 +313,9 @@ describe('AuthService', () => {
       );
     });
 
-    it('should throw UnauthorizedException when user not found', async () => {
+    it('should throw UnauthorizedException when stored token does not match', async () => {
       jwtService.verify.mockReturnValue({ sub: 'user-123' });
-      usersService.findOne.mockRejectedValue(new NotFoundException());
-
-      await expect(service.refreshToken(oldRefreshToken)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw UnauthorizedException when user has no refresh token', async () => {
-      jwtService.verify.mockReturnValue({ sub: 'user-123' });
-      usersService.findOne.mockResolvedValue({
-        ...mockUser,
-        refreshToken: undefined,
-      } as any);
+      redisService.getRefreshToken.mockResolvedValue('different-token');
 
       await expect(service.refreshToken(oldRefreshToken)).rejects.toThrow(
         UnauthorizedException,
@@ -333,31 +325,37 @@ describe('AuthService', () => {
       );
     });
 
-    it('should throw UnauthorizedException when token does not match', async () => {
+    it('should throw UnauthorizedException when no token in Redis', async () => {
       jwtService.verify.mockReturnValue({ sub: 'user-123' });
-      usersService.findOne.mockResolvedValue({
-        ...mockUser,
-        refreshToken: 'hashed-token',
-      } as any);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      redisService.getRefreshToken.mockResolvedValue(null);
 
       await expect(service.refreshToken(oldRefreshToken)).rejects.toThrow(
         UnauthorizedException,
+      );
+      await expect(service.refreshToken(oldRefreshToken)).rejects.toThrow(
+        'Invalid refresh token',
+      );
+    });
+
+    it('should throw UnauthorizedException when user not found', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'user-123' });
+      redisService.getRefreshToken.mockResolvedValue('old-refresh-token');
+      usersService.findOne.mockRejectedValue(new NotFoundException());
+
+      await expect(service.refreshToken(oldRefreshToken)).rejects.toThrow(
+        NotFoundException,
       );
     });
   });
 
   describe('logout', () => {
-    it('should clear refresh token', async () => {
-      usersService.updateRefreshToken.mockResolvedValue();
+    it('should clear refresh token from Redis', async () => {
+      redisService.removeRefreshToken.mockResolvedValue();
 
       const result = await service.logout('user-123');
 
       expect(result).toEqual({ message: 'Logged out successfully' });
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith(
-        'user-123',
-        null,
-      );
+      expect(redisService.removeRefreshToken).toHaveBeenCalledWith('user-123');
     });
   });
 

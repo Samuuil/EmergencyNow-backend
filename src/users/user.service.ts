@@ -5,13 +5,16 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { User } from './entities/user.entity';
+import { Profile } from '../profiles/entities/profile.entity';
 import { CreateUserDto } from './dto/createUser.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { Role } from '../common/enums/role.enum';
 import { UserErrorCode, UserErrorMessages } from './errors/user-errors.enum';
+
+const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class UsersService {
@@ -46,7 +49,7 @@ export class UsersService {
         filterableColumns: {
           role: [FilterOperator.EQ],
         },
-        relations: ['profile', 'contacts', 'calls', 'stateArchive'],
+        relations: ['profile', 'stateArchive'],
         defaultLimit: 10,
         maxLimit: 100,
       });
@@ -147,25 +150,6 @@ export class UsersService {
     }
   }
 
-  async updateRefreshToken(
-    userId: string,
-    refreshToken: string | null,
-  ): Promise<void> {
-    try {
-      await this.usersRepository.update(userId, {
-        refreshToken: refreshToken ?? undefined,
-      });
-    } catch (error) {
-      this.logger.error(
-        `${UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED,
-        message: UserErrorMessages[UserErrorCode.REFRESH_TOKEN_UPDATE_FAILED],
-      });
-    }
-  }
-
   async createWithExistingStateArchive(
     stateArchiveId: string,
     role?: Role,
@@ -177,6 +161,16 @@ export class UsersService {
       });
       return await this.usersRepository.save(user);
     } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error as any).code === PG_UNIQUE_VIOLATION
+      ) {
+        const existing = await this.usersRepository.findOne({
+          where: { stateArchive: { id: stateArchiveId } },
+          relations: ['stateArchive', 'profile'],
+        });
+        if (existing) return existing;
+      }
       this.logger.error(
         `${UserErrorMessages[UserErrorCode.USER_CREATION_FAILED]}: ${error}`,
       );
@@ -188,21 +182,52 @@ export class UsersService {
   }
 
   async findUserRole(userId: string): Promise<string> {
-    try {
-      const user = await this.findOne(userId);
-      return user.role;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(
-        `${UserErrorMessages[UserErrorCode.DATABASE_ERROR]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: UserErrorCode.DATABASE_ERROR,
-        message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'role'],
+    });
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
+    }
+    return user.role;
+  }
+
+  async exists(id: string): Promise<boolean> {
+    const count = await this.usersRepository.count({ where: { id } });
+    return count > 0;
+  }
+
+  async findByIdWithStateArchive(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: ['stateArchive'],
+    });
+  }
+
+  async findByIdWithProfile(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: ['profile'],
+    });
+  }
+
+  async linkProfile(userId: string, profile: Profile): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({
+        code: UserErrorCode.USER_NOT_FOUND,
+        message: UserErrorMessages[UserErrorCode.USER_NOT_FOUND],
       });
     }
+    user.profile = profile;
+    await this.usersRepository.save(user);
+  }
+
+  async findByEgnWithProfileAndStateArchive(egn: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { stateArchive: { egn } },
+      relations: ['profile', 'stateArchive'],
+    });
   }
 
   async findUserEgn(userId: string): Promise<{ egn: string }> {

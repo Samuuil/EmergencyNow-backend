@@ -21,6 +21,7 @@ import { AmbulancesService } from './ambulance.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
 import { AssignDriverDto } from './dtos/assign-driver.dto';
+import { UpdateLocationBodyDto } from './dtos/update-location-body.dto';
 import { Ambulance } from './entities/ambulance.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -80,7 +81,7 @@ export class AmbulancesController {
   @ApiOperation({ summary: 'Update ambulance location' })
   updateLocation(
     @Param('id') id: string,
-    @Body() body: { latitude: number; longitude: number },
+    @Body() body: UpdateLocationBodyDto,
   ): Promise<Ambulance> {
     return this.ambulancesService.updateLocation(
       id,

@@ -1,7 +1,6 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { DriverGateway } from './driver.gateway';
 import { UserGateway } from './user.gateway';
-import { CallsModule } from '../calls/call.module';
 import { AmbulancesModule } from '../ambulances/ambulance.module';
 import { AuthModule } from '../auth/auth.module';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
@@ -11,15 +10,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 @Module({
   imports: [
     ConfigModule,
-    forwardRef(() => CallsModule),
-    forwardRef(() => AmbulancesModule),
+    AmbulancesModule,
     AuthModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'defaultSecret',
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) throw new Error('JWT_SECRET must be configured');
+        return { secret };
+      },
     }),
   ],
   providers: [DriverGateway, UserGateway, WsJwtGuard],

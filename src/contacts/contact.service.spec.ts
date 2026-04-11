@@ -72,34 +72,6 @@ describe('ContactsService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('create', () => {
-    const createContactDto = {
-      name: 'John Doe',
-      phoneNumber: '+1234567890',
-      email: 'john@example.com',
-    };
-
-    it('should create a contact successfully', async () => {
-      contactsRepository.create.mockReturnValue(mockContact);
-      contactsRepository.save.mockResolvedValue(mockContact);
-
-      const result = await service.create(createContactDto);
-
-      expect(result).toEqual(mockContact);
-      expect(contactsRepository.create).toHaveBeenCalledWith(createContactDto);
-      expect(contactsRepository.save).toHaveBeenCalledWith(mockContact);
-    });
-
-    it('should throw InternalServerErrorException on database error', async () => {
-      contactsRepository.create.mockReturnValue(mockContact);
-      contactsRepository.save.mockRejectedValue(new Error('Database error'));
-
-      await expect(service.create(createContactDto)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-    });
-  });
-
   describe('findAll', () => {
     const mockQuery = {
       path: '',

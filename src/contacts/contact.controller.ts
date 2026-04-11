@@ -82,13 +82,6 @@ export class ContactsController {
     return { message: 'Contact deleted successfully' };
   }
 
-  @Post()
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Create a new contact (Admin only)' })
-  async create(@Body() dto: CreateContactDto) {
-    return this.contactsService.create(dto);
-  }
-
   @Get()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get all contacts (Admin only)' })

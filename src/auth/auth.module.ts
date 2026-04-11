@@ -22,10 +22,11 @@ import { VerificationCodeService } from './services/verification-code.service';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'defaultSecret',
-        signOptions: { expiresIn: '1d' },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) throw new Error('JWT_SECRET must be configured');
+        return { secret, signOptions: { expiresIn: '1d' } };
+      },
     }),
   ],
   providers: [

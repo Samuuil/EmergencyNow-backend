@@ -2,7 +2,6 @@ import { Role } from '../enums/role.enum';
 
 export interface JwtPayload {
   sub: string;
-  egn: string;
   role: Role;
   iat?: number;
   exp?: number;
@@ -10,7 +9,6 @@ export interface JwtPayload {
 
 export interface AuthenticatedUser {
   id: string;
-  egn: string;
   role: Role;
 }
 
