@@ -150,58 +150,38 @@ export class CallsService {
       );
     }
 
-    const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
+    const excludedIds = new Set(
+      this.driverGateway.getRejectedAmbulanceIds(callId),
+    );
 
     if (call.user?.stateArchive?.egn) {
       const ambulancesWithMatchingDriverEgn =
         await this.ambulancesService.findAvailableWithDriverEgn(
           call.user.stateArchive.egn,
         );
-      ambulancesWithMatchingDriverEgn.forEach((amb) => {
-        excluded.push(amb.id);
-      });
+      ambulancesWithMatchingDriverEgn.forEach((amb) => excludedIds.add(amb.id));
     }
 
-    let candidate =
-      await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
-        { latitude: call.latitude, longitude: call.longitude },
-        excluded,
-      );
+    const allAvailable = await this.ambulancesService.findAvailableList();
+    const candidates = allAvailable.filter(
+      (amb) =>
+        amb.latitude != null &&
+        amb.longitude != null &&
+        !excludedIds.has(amb.id) &&
+        amb.driverId != null &&
+        this.driverGateway.isDriverOnline(amb.driverId),
+    );
 
-    while (
-      candidate &&
-      (!candidate.driverId ||
-        !this.driverGateway.isDriverOnline(candidate.driverId))
-    ) {
-      excluded.push(candidate.id);
-      candidate =
-        await this.ambulancesService.findNearestAvailableAmbulanceExcluding(
-          { latitude: call.latitude, longitude: call.longitude },
-          excluded,
-        );
-    }
+    const candidate = await this.ambulancesService.findNearestFromList(
+      candidates,
+      { latitude: call.latitude, longitude: call.longitude },
+    );
 
     if (!candidate) {
       return;
     }
 
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
-
-    let distance = 0;
-    let duration = 0;
-    try {
-      const res = await this.googleMapsService.getDistanceAndDuration(
-        { latitude: candidate.latitude, longitude: candidate.longitude },
-        { latitude: call.latitude, longitude: call.longitude },
-      );
-      distance = res.distance;
-      duration = res.duration;
-    } catch (error) {
-      this.logger.error(
-        'getDistanceAndDuration failed, sending offer without ETA:',
-        error,
-      );
-    }
 
     this.driverGateway.offerCall({
       callId: call.id,
@@ -210,8 +190,8 @@ export class CallsService {
       longitude: call.longitude,
       ambulanceId: candidate.id,
       driverId: candidate.driverId!,
-      distance,
-      duration,
+      distance: candidate.distance,
+      duration: candidate.duration,
     });
   }
 
