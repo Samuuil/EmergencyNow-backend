@@ -15,7 +15,7 @@ import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Contact } from './entities/contact.entity';
 import { CreateContactDto } from './dto/createContact.dto';
 import { UpdateContactDto } from './dto/updateContact.dto';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 
 @Injectable()
 export class ContactsService {
@@ -25,24 +25,8 @@ export class ContactsService {
   constructor(
     @InjectRepository(Contact)
     private readonly contactsRepository: Repository<Contact>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly usersService: UsersService,
   ) {}
-
-  async create(dto: CreateContactDto): Promise<Contact> {
-    try {
-      const contact = this.contactsRepository.create(dto);
-      return await this.contactsRepository.save(contact);
-    } catch (error) {
-      this.logger.error(
-        `${ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED]}: ${error}`,
-      );
-      throw new InternalServerErrorException({
-        code: ContactErrorCode.CONTACT_CREATION_FAILED,
-        message: ContactErrorMessages[ContactErrorCode.CONTACT_CREATION_FAILED],
-      });
-    }
-  }
 
   async findAll(query: PaginateQuery) {
     try {
@@ -184,19 +168,17 @@ export class ContactsService {
     dto: CreateContactDto,
   ): Promise<Contact> {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        relations: ['contacts'],
-      });
-
-      if (!user) {
+      const userExists = await this.usersService.exists(userId);
+      if (!userExists) {
         throw new NotFoundException({
           code: ContactErrorCode.USER_NOT_FOUND,
           message: ContactErrorMessages[ContactErrorCode.USER_NOT_FOUND],
         });
       }
 
-      const currentContactCount = user.contacts?.length || 0;
+      const currentContactCount = await this.contactsRepository.count({
+        where: { user: { id: userId } },
+      });
       if (currentContactCount >= this.MAX_CONTACTS) {
         throw new BadRequestException({
           code: ContactErrorCode.MAX_CONTACTS_REACHED,
@@ -206,7 +188,7 @@ export class ContactsService {
 
       const contact = this.contactsRepository.create({
         ...dto,
-        user,
+        user: { id: userId } as any,
       });
 
       const savedContact = await this.contactsRepository.save(contact);

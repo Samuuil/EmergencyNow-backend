@@ -1,5 +1,6 @@
 import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { InitiateLoginDto } from './dto/initiate-login.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
@@ -9,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Auth')
 @Controller('auth')
+@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -16,6 +18,7 @@ export class AuthController {
   ) {}
 
   @Post('initiate-login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Initiate login by sending verification code' })
   async initiateLogin(
     @Body() dto: InitiateLoginDto,
@@ -24,6 +27,7 @@ export class AuthController {
   }
 
   @Post('verify-code')
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @ApiOperation({ summary: 'Verify code and get access tokens' })
   async verifyCode(
     @Body() dto: VerifyCodeDto,

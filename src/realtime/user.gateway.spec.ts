@@ -62,7 +62,6 @@ describe('UserGateway', () => {
       const mockPayload = {
         sub: 'user-123',
         role: 'USER',
-        egn: '1234567890',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -79,7 +78,6 @@ describe('UserGateway', () => {
       expect(client.user).toEqual({
         id: 'user-123',
         role: 'USER',
-        egn: '1234567890',
       });
       expect(gateway.isUserOnline('user-123')).toBe(true);
       expect(client.disconnect).not.toHaveBeenCalled();
@@ -89,7 +87,6 @@ describe('UserGateway', () => {
       const mockPayload = {
         sub: 'user-456',
         role: 'USER',
-        egn: '0987654321',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -111,7 +108,6 @@ describe('UserGateway', () => {
       const mockPayload = {
         sub: 'user-789',
         role: 'USER',
-        egn: '1122334455',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -439,8 +435,8 @@ describe('UserGateway', () => {
     it('should handle multiple connected users', () => {
       configService.get.mockReturnValue('test-secret');
 
-      const mockPayload1 = { sub: 'user-1', role: 'USER', egn: '1111111111' };
-      const mockPayload2 = { sub: 'user-2', role: 'USER', egn: '2222222222' };
+      const mockPayload1 = { sub: 'user-1', role: 'USER' };
+      const mockPayload2 = { sub: 'user-2', role: 'USER' };
 
       jwtService.verify.mockReturnValueOnce(mockPayload1);
 

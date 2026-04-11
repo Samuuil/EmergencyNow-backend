@@ -111,7 +111,7 @@ describe('VerificationCodeService', () => {
 
       redisService.get.mockResolvedValueOnce(emailData);
       redisService.get.mockResolvedValueOnce(null);
-      redisService.del.mockResolvedValue(1);
+      redisService.getdel.mockResolvedValue(emailData);
 
       const result = await service.verifyAndConsumeCode(egn, code);
 
@@ -120,7 +120,7 @@ describe('VerificationCodeService', () => {
         method: 'email',
         egn: '1234567890',
       });
-      expect(redisService.del).toHaveBeenCalledWith('verify:email:1234567890');
+      expect(redisService.getdel).toHaveBeenCalledWith('verify:email:1234567890');
     });
 
     it('should verify and consume SMS verification code', async () => {
@@ -132,7 +132,7 @@ describe('VerificationCodeService', () => {
 
       redisService.get.mockResolvedValueOnce(null);
       redisService.get.mockResolvedValueOnce(smsData);
-      redisService.del.mockResolvedValue(1);
+      redisService.getdel.mockResolvedValue(smsData);
 
       const result = await service.verifyAndConsumeCode(egn, code);
 
@@ -141,7 +141,7 @@ describe('VerificationCodeService', () => {
         method: 'sms',
         egn: '1234567890',
       });
-      expect(redisService.del).toHaveBeenCalledWith('verify:sms:1234567890');
+      expect(redisService.getdel).toHaveBeenCalledWith('verify:sms:1234567890');
     });
 
     it('should throw UnauthorizedException when code not found', async () => {
@@ -187,7 +187,7 @@ describe('VerificationCodeService', () => {
 
       redisService.get.mockResolvedValueOnce(emailData);
       redisService.get.mockResolvedValueOnce(null);
-      redisService.del.mockResolvedValue(1);
+      redisService.getdel.mockResolvedValue(emailData);
 
       const result = await service.verifyAndConsumeCode(
         '  1234567890  ',
@@ -196,6 +196,22 @@ describe('VerificationCodeService', () => {
 
       expect(result.egn).toBe('1234567890');
       expect(result.code).toBe('123456');
+    });
+
+    it('should throw UnauthorizedException when concurrent request already consumed the code', async () => {
+      const emailData = JSON.stringify({
+        code: '123456',
+        method: 'email',
+        egn: '1234567890',
+      });
+
+      redisService.get.mockResolvedValueOnce(emailData);
+      redisService.get.mockResolvedValueOnce(null);
+      redisService.getdel.mockResolvedValue(null);
+
+      await expect(service.verifyAndConsumeCode(egn, code)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 

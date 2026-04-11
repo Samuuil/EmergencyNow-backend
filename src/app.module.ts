@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RedisModule } from './common/redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { AmbulancesModule } from './ambulances/ambulance.module';
@@ -20,6 +22,8 @@ import { SeedingModule } from './seeding/seeding.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    EventEmitterModule.forRoot(),
     RedisModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

@@ -61,7 +61,6 @@ describe('WsJwtGuard', () => {
       const mockPayload = {
         sub: 'user-123',
         role: 'USER',
-        egn: '1234567890',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -80,7 +79,6 @@ describe('WsJwtGuard', () => {
       expect(client.user).toEqual({
         id: 'user-123',
         role: 'USER',
-        egn: '1234567890',
       });
       expect(jwtService.verify).toHaveBeenCalledWith('valid-token', {
         secret: 'test-secret',
@@ -91,7 +89,6 @@ describe('WsJwtGuard', () => {
       const mockPayload = {
         sub: 'user-456',
         role: 'DRIVER',
-        egn: '0987654321',
       };
 
       configService.get.mockReturnValue('test-secret');
@@ -115,7 +112,6 @@ describe('WsJwtGuard', () => {
       const mockPayload = {
         sub: 'user-789',
         role: 'ADMIN',
-        egn: '1122334455',
       };
 
       configService.get.mockReturnValue('test-secret');

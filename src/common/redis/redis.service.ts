@@ -60,13 +60,6 @@ export class RedisService implements OnModuleDestroy {
 
   async addRefreshToken(userId: string, refreshToken: string): Promise<string> {
     const key = `refresh-token:${userId}`;
-    const existingToken = await this.client.get(key);
-    
-    if (existingToken) {
-      await this.client.del(key);
-    }
-    
-    // Store for 30 days (2592000 seconds)
     await this.client.set(key, refreshToken, 'EX', 2592000);
     return refreshToken;
   }

@@ -31,7 +31,6 @@ export class UsersController {
   @Post()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Create a new user' })
-  @Roles(Role.ADMIN)
   async create(@Body() dto: CreateUserDto): Promise<User> {
     return await this.usersService.create(dto);
   }
@@ -45,6 +44,7 @@ export class UsersController {
   }
 
   @Get('user-role/:id')
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get user role by user ID' })
   async findRole(@Param('id') id: string): Promise<string> {
     return await this.usersService.findUserRole(id);

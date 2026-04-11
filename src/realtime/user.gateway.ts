@@ -4,20 +4,19 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { UseGuards, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Server } from 'socket.io';
-import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 import type { UserSocket, JwtPayload } from './user.types';
+import { extractWsToken } from './extract-ws-token.util';
 
 @WebSocketGateway({
   namespace: '/users',
   cors: { origin: true, credentials: true },
   allowEIO3: true,
 })
-@UseGuards(WsJwtGuard)
 export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -41,14 +40,16 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      const jwtSecret = this.config.get<string>('JWT_SECRET');
+      if (!jwtSecret) throw new Error('JWT_SECRET must be configured');
+
       const payload = this.jwt.verify<JwtPayload>(token, {
-        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+        secret: jwtSecret,
       });
 
       client.user = {
         id: payload.sub,
         role: payload.role,
-        egn: payload.egn,
       };
 
       this.userSockets.set(payload.sub, client.id);
@@ -75,22 +76,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private extractToken(client: UserSocket): string | null {
-    const headers = client.handshake?.headers as
-      | Record<string, string>
-      | undefined;
-
-    const authHeader = headers?.authorization || headers?.Authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.slice(7);
-    }
-
-    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
-    if (tokenFromAuth) return tokenFromAuth;
-
-    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
-    if (tokenFromQuery) return tokenFromQuery;
-
-    return null;
+    return extractWsToken(client);
   }
 
   notifyCallDispatched(

@@ -20,9 +20,11 @@ import { BasePaginationDto } from '../common/dtos';
 import { CallsService } from './call.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
+import { LocationBodyDto } from './dto/location-body.dto';
+import { SelectHospitalBodyDto } from './dto/select-hospital-body.dto';
+import { UpdateStatusBodyDto } from './dto/update-status-body.dto';
 import { Call } from './entities/call.entity';
 import { User } from '../users/entities/user.entity';
-import { CallStatus } from '../common/enums/call-status.enum';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -87,7 +89,7 @@ export class CallsController {
   @ApiOperation({ summary: 'Get nearby hospitals for call' })
   getHospitalsForCall(
     @Param('id') id: string,
-    @Body() body: { latitude: number; longitude: number },
+    @Body() body: LocationBodyDto,
   ) {
     return this.callsService.getHospitalsForCall(
       id,
@@ -101,7 +103,7 @@ export class CallsController {
   @ApiOperation({ summary: 'Select hospital for call' })
   selectHospital(
     @Param('id') id: string,
-    @Body() body: { hospitalId: string; latitude: number; longitude: number },
+    @Body() body: SelectHospitalBodyDto,
   ) {
     return this.callsService.selectHospitalForCall(
       id,
@@ -130,7 +132,7 @@ export class CallsController {
   @ApiOperation({ summary: 'Update ambulance location for call' })
   updateAmbulanceLocation(
     @Param('id') id: string,
-    @Body() body: { latitude: number; longitude: number },
+    @Body() body: LocationBodyDto,
   ): Promise<Call> {
     return this.callsService.updateAmbulanceLocation(
       id,
@@ -144,7 +146,7 @@ export class CallsController {
   @ApiOperation({ summary: 'Update call status' })
   updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: CallStatus },
+    @Body() body: UpdateStatusBodyDto,
   ): Promise<Call> {
     return this.callsService.updateStatus(id, body.status);
   }

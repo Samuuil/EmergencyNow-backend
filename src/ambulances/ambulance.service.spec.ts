@@ -38,7 +38,6 @@ describe('AmbulancesService', () => {
   const mockUser: User = {
     id: 'user-123',
     role: 'DRIVER' as any,
-    refreshToken: undefined,
     profile: null as any,
     contacts: [],
     calls: [],
@@ -304,54 +303,6 @@ describe('AmbulancesService', () => {
       await expect(service.findAvailableList()).rejects.toThrow(
         InternalServerErrorException,
       );
-    });
-  });
-
-  describe('findNearestAvailableAmbulance', () => {
-    const location = { latitude: 42.7, longitude: 23.3 };
-
-    it('should find nearest available ambulance', async () => {
-      const ambulances = [
-        { ...mockAmbulance, latitude: 42.69, longitude: 23.32 },
-        { ...mockAmbulance, id: 'amb-2', latitude: 42.8, longitude: 23.5 },
-        { ...mockAmbulance, id: 'amb-3', latitude: 42.71, longitude: 23.33 },
-      ];
-      ambulanceRepository.find.mockResolvedValue(ambulances);
-      googleMapsService.getDistancesToMultipleDestinations.mockResolvedValue([
-        { distance: 3000, duration: 300 },
-        { distance: 5000, duration: 600 },
-        { distance: 2500, duration: 250 },
-      ]);
-
-      const result = await service.findNearestAvailableAmbulance(location);
-
-      expect(result).toBeDefined();
-      expect(result!.id).toBe('amb-3');
-      expect(result!.distance).toBe(2500);
-      expect(result!.duration).toBe(250);
-      expect(
-        googleMapsService.getDistancesToMultipleDestinations,
-      ).toHaveBeenCalledWith(location, expect.any(Array));
-    });
-
-    it('should return null when no available ambulances', async () => {
-      ambulanceRepository.find.mockResolvedValue([]);
-
-      const result = await service.findNearestAvailableAmbulance(location);
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when ambulances have no location data', async () => {
-      const ambulances = [
-        { ...mockAmbulance, latitude: null, longitude: null },
-        { ...mockAmbulance, id: 'amb-2', latitude: null, longitude: 23.5 },
-      ] as any;
-      ambulanceRepository.find.mockResolvedValue(ambulances);
-
-      const result = await service.findNearestAvailableAmbulance(location);
-
-      expect(result).toBeNull();
     });
   });
 

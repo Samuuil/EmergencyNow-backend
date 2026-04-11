@@ -6,10 +6,10 @@ import { ContactsController } from './contact.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { User } from '../users/entities/user.entity';
+import { UsersModule } from '../users/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Contact, User]), JwtModule.register({})],
+  imports: [TypeOrmModule.forFeature([Contact]), UsersModule, JwtModule.register({})],
   controllers: [ContactsController],
   providers: [ContactsService, JwtAuthGuard, RolesGuard],
   exports: [ContactsService],

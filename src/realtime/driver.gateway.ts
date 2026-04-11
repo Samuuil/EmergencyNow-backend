@@ -7,22 +7,22 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Server } from 'socket.io';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
-import { CallsService } from '../calls/call.service';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 import type { DriverSocket, JwtPayload } from './driver.types';
+import { extractWsToken } from './extract-ws-token.util';
 
 @WebSocketGateway({
   namespace: '/drivers',
   cors: { origin: true, credentials: true },
   allowEIO3: true,
 })
-@UseGuards(WsJwtGuard)
 export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -42,28 +42,15 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     number,
     {
       driverIdToAmbulanceId: Map<string, string>;
-      collected: Array<{
-        ambulanceId: string;
-        latitude: number;
-        longitude: number;
-      }>;
-      resolve: (
-        value: Array<{
-          ambulanceId: string;
-          latitude: number;
-          longitude: number;
-        }>,
-      ) => void;
+      respondedAmbulanceIds: Set<string>;
     }
   >();
 
   constructor(
-    @Inject(forwardRef(() => CallsService))
-    private readonly callsService: CallsService,
-    @Inject(forwardRef(() => AmbulancesService))
     private readonly ambulancesService: AmbulancesService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   handleConnection(client: DriverSocket) {
@@ -75,14 +62,16 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      const jwtSecret = this.config.get<string>('JWT_SECRET');
+      if (!jwtSecret) throw new Error('JWT_SECRET must be configured');
+
       const payload = this.jwt.verify<JwtPayload>(token, {
-        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+        secret: jwtSecret,
       });
 
       client.user = {
         id: payload.sub,
         role: payload.role,
-        egn: payload.egn,
       };
 
       this.driverSockets.set(payload.sub, client.id);
@@ -106,6 +95,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('call.respond')
   async onDriverRespond(
     @ConnectedSocket() client: DriverSocket,
@@ -114,13 +104,14 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const driverId = this.socketDrivers.get(client.id);
     if (!driverId) return;
-    await this.callsService.handleDriverResponse(
-      data.callId,
+    await this.eventEmitter.emitAsync('driver.responded', {
+      callId: data.callId,
       driverId,
-      data.accept,
-    );
+      accept: data.accept,
+    });
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('location.response')
   async onLocationResponse(
     @ConnectedSocket() client: DriverSocket,
@@ -136,13 +127,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const ambulanceId = pending.driverIdToAmbulanceId.get(driverId);
     if (!ambulanceId) return;
 
-    if (!pending.collected.some((c) => c.ambulanceId === ambulanceId)) {
-      pending.collected.push({
-        ambulanceId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-      });
-
+    if (!pending.respondedAmbulanceIds.has(ambulanceId)) {
+      pending.respondedAmbulanceIds.add(ambulanceId);
       await this.ambulancesService.updateLocation(
         ambulanceId,
         data.latitude,
@@ -151,6 +137,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('location.update')
   async onLocationUpdate(
     @ConnectedSocket() client: DriverSocket,
@@ -167,34 +154,12 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       return;
     }
-    try {
-      const call = await this.callsService.updateAmbulanceLocation(
-        data.callId,
-        data.latitude,
-        data.longitude,
-      );
-      this.logger.log(
-        `[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`,
-      );
-      if (
-        call &&
-        call.routePolyline &&
-        call.estimatedDistance &&
-        call.estimatedDuration
-      ) {
-        this.emitToDriver(driverId, 'route.update', {
-          callId: call.id,
-          route: {
-            polyline: call.routePolyline,
-            distance: call.estimatedDistance,
-            duration: call.estimatedDuration,
-            steps: call.routeSteps || [],
-          },
-        });
-      }
-    } catch (e) {
-      this.logger.error(`Failed to handle location update`, e);
-    }
+    await this.eventEmitter.emitAsync('driver.location.updated', {
+      callId: data.callId,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      driverId,
+    });
   }
 
   offerCall(params: {
@@ -286,25 +251,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private extractToken(client: DriverSocket): string | null {
-    const headers = client.handshake?.headers as
-      | Record<string, string>
-      | undefined;
-
-    const authHeader = headers?.authorization || headers?.Authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.slice(7);
-    }
-
-    const tokenFromAuth = client.handshake?.auth?.token as string | undefined;
-    if (tokenFromAuth) return tokenFromAuth;
-
-    const tokenFromQuery = client.handshake?.query?.token as string | undefined;
-    if (tokenFromQuery) return tokenFromQuery;
-
-    return null;
+    return extractWsToken(client);
   }
 
-  async refreshAvailableAmbulanceLocations(timeoutMs = 5000): Promise<void> {
+  async refreshAvailableAmbulanceLocations(): Promise<void> {
     const driverIdToAmbulanceId =
       await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
@@ -320,41 +270,17 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const requestId = ++this.locationRequestId;
-
-    const collectedLocations = await new Promise<
-      Array<{ ambulanceId: string; latitude: number; longitude: number }>
-    >((resolve) => {
-      const pendingEntry = {
-        driverIdToAmbulanceId,
-        collected: [] as Array<{
-          ambulanceId: string;
-          latitude: number;
-          longitude: number;
-        }>,
-        resolve,
-      };
-      this.pendingLocationRequests.set(requestId, pendingEntry);
-
-      for (const driverId of onlineDriverIds) {
-        this.emitToDriver(driverId, 'location.request', {
-          requestId,
-        });
-      }
-
-      setTimeout(() => {
-        const entry = this.pendingLocationRequests.get(requestId);
-        this.pendingLocationRequests.delete(requestId);
-        resolve(entry?.collected ?? []);
-      }, timeoutMs);
+    this.pendingLocationRequests.set(requestId, {
+      driverIdToAmbulanceId,
+      respondedAmbulanceIds: new Set(),
     });
 
-    if (collectedLocations.length > 0) {
-      this.logger.log(
-        `Collected ${collectedLocations.length} location(s) from drivers; updating DB`,
-      );
-      await this.ambulancesService.bulkUpdateLocations(collectedLocations);
-    } else {
-      this.logger.warn('No location responses received from drivers');
+    for (const driverId of onlineDriverIds) {
+      this.emitToDriver(driverId, 'location.request', { requestId });
     }
+
+    setTimeout(() => {
+      this.pendingLocationRequests.delete(requestId);
+    }, 10000);
   }
 }
