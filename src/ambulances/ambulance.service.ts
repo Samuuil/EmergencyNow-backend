@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Ambulance } from './entities/ambulance.entity';
 import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 import {
   GoogleMapsService,
   Location,
@@ -34,8 +35,7 @@ export class AmbulancesService {
   constructor(
     @InjectRepository(Ambulance)
     private readonly ambulanceRepository: Repository<Ambulance>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly usersService: UsersService,
     private readonly googleMapsService: GoogleMapsService,
   ) {}
 
@@ -53,10 +53,8 @@ export class AmbulancesService {
       }
 
       if (driverId) {
-        const driver = await this.userRepository.findOne({
-          where: { id: driverId },
-        });
-        if (!driver) {
+        const driverExists = await this.usersService.exists(driverId);
+        if (!driverExists) {
           throw new NotFoundException({
             code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
             message:
@@ -164,11 +162,8 @@ export class AmbulancesService {
       }
 
       if (dto.driverId) {
-        const driver = await this.userRepository.findOne({
-          where: { id: dto.driverId },
-        });
-
-        if (!driver) {
+        const driverExists = await this.usersService.exists(dto.driverId);
+        if (!driverExists) {
           throw new NotFoundException({
             code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
             message:
@@ -441,11 +436,8 @@ export class AmbulancesService {
     try {
       const ambulance = await this.findOne(id);
 
-      const driver = await this.userRepository.findOne({
-        where: { id: driverId },
-      });
-
-      if (!driver) {
+      const driverExists = await this.usersService.exists(driverId);
+      if (!driverExists) {
         throw new NotFoundException({
           code: AmbulanceErrorCode.DRIVER_NOT_FOUND,
           message: AmbulanceErrorMessages[AmbulanceErrorCode.DRIVER_NOT_FOUND],
@@ -509,6 +501,18 @@ export class AmbulancesService {
     return await this.ambulanceRepository.findOne({
       where: { driverId },
     });
+  }
+
+  async findAvailableWithDriverEgn(egn: string): Promise<Ambulance[]> {
+    return this.ambulanceRepository
+      .createQueryBuilder('ambulance')
+      .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
+      .innerJoin('driver.stateArchive', 'stateArchive')
+      .where('ambulance.available = :available', { available: true })
+      .andWhere('ambulance.driverId IS NOT NULL')
+      .andWhere('stateArchive.egn = :egn', { egn })
+      .select('ambulance.id')
+      .getMany();
   }
 
   async getDriverIdToAmbulanceIdMap(): Promise<Map<string, string>> {

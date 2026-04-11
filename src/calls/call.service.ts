@@ -2,9 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  Inject,
-  forwardRef,
+  Logger,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -12,8 +12,8 @@ import { Call } from './entities/call.entity';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
 import { User } from '../users/entities/user.entity';
-import { Ambulance } from '../ambulances/entities/ambulance.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
+import { UsersService } from '../users/user.service';
 import {
   HospitalsService,
   HospitalWithDistance,
@@ -26,21 +26,30 @@ import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 
+interface DriverRespondedEvent {
+  callId: string;
+  driverId: string;
+  accept: boolean;
+}
+
+interface DriverLocationUpdatedEvent {
+  callId: string;
+  latitude: number;
+  longitude: number;
+  driverId: string;
+}
+
 @Injectable()
 export class CallsService {
+  private readonly logger = new Logger(CallsService.name);
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(Ambulance)
-    private readonly ambulanceRepository: Repository<Ambulance>,
+    private readonly usersService: UsersService,
     private readonly ambulancesService: AmbulancesService,
     private readonly hospitalsService: HospitalsService,
     private readonly googleMapsService: GoogleMapsService,
-    @Inject(forwardRef(() => DriverGateway))
     private readonly driverGateway: DriverGateway,
-    @Inject(forwardRef(() => UserGateway))
     private readonly userGateway: UserGateway,
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
@@ -48,10 +57,7 @@ export class CallsService {
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
-    const fullUser = await this.userRepository.findOne({
-      where: { id: user.id },
-      relations: ['stateArchive'],
-    });
+    const fullUser = await this.usersService.findByIdWithStateArchive(user.id);
 
     if (!fullUser) throw new BadRequestException('User not found');
 
@@ -77,6 +83,42 @@ export class CallsService {
     );
 
     return this.findOne(savedCall.id);
+  }
+
+  @OnEvent('driver.responded')
+  async onDriverResponded(event: DriverRespondedEvent): Promise<void> {
+    try {
+      await this.handleDriverResponse(event.callId, event.driverId, event.accept);
+    } catch (e) {
+      this.logger.error(`Failed to handle driver.responded event`, e);
+    }
+  }
+
+  @OnEvent('driver.location.updated')
+  async onDriverLocationUpdated(event: DriverLocationUpdatedEvent): Promise<void> {
+    try {
+      const call = await this.updateAmbulanceLocation(
+        event.callId,
+        event.latitude,
+        event.longitude,
+      );
+      this.logger.log(
+        `[driver.location.updated] Updated call ${call.id}, userId=${call.user?.id}`,
+      );
+      if (call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
+        this.driverGateway.sendRouteToDriver(event.driverId, {
+          callId: call.id,
+          route: {
+            polyline: call.routePolyline,
+            distance: call.estimatedDistance,
+            duration: call.estimatedDuration,
+            steps: call.routeSteps || [],
+          },
+        });
+      }
+    } catch (e) {
+      this.logger.error(`Failed to handle driver.location.updated event`, e);
+    }
   }
 
   async dispatchNearestAmbulance(callId: string): Promise<Call> {
@@ -113,18 +155,10 @@ export class CallsService {
     const excluded = this.driverGateway.getRejectedAmbulanceIds(callId);
 
     if (call.user?.stateArchive?.egn) {
-      const callerEgn = call.user.stateArchive.egn;
-
-      const ambulancesWithMatchingDriverEgn = await this.ambulanceRepository
-        .createQueryBuilder('ambulance')
-        .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
-        .innerJoin('driver.stateArchive', 'stateArchive')
-        .where('ambulance.available = :available', { available: true })
-        .andWhere('ambulance.driverId IS NOT NULL')
-        .andWhere('stateArchive.egn = :callerEgn', { callerEgn })
-        .select('ambulance.id')
-        .getMany();
-
+      const ambulancesWithMatchingDriverEgn =
+        await this.ambulancesService.findAvailableWithDriverEgn(
+          call.user.stateArchive.egn,
+        );
       ambulancesWithMatchingDriverEgn.forEach((amb) => {
         excluded.push(amb.id);
       });
@@ -602,13 +636,12 @@ export class CallsService {
       return;
     }
 
-    const fullUser = await this.userRepository.findOne({
-      where: { id: call.user.id },
-      relations: ['stateArchive'],
-    });
+    const hospitalUser = await this.usersService.findByIdWithStateArchive(
+      call.user.id,
+    );
     const userName =
-      fullUser?.stateArchive?.fullName ||
-      fullUser?.stateArchive?.email ||
+      hospitalUser?.stateArchive?.fullName ||
+      hospitalUser?.stateArchive?.email ||
       'Your contact';
 
     const emailPromises = contacts

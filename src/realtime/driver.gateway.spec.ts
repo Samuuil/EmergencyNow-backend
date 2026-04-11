@@ -1,21 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DriverGateway } from './driver.gateway';
-import { CallsService } from '../calls/call.service';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import type { DriverSocket } from './driver.types';
 
 describe('DriverGateway', () => {
   let gateway: DriverGateway;
-  let callsService: jest.Mocked<CallsService>;
   let ambulancesService: jest.Mocked<AmbulancesService>;
   let jwtService: jest.Mocked<JwtService>;
   let configService: jest.Mocked<ConfigService>;
+  let eventEmitter: jest.Mocked<EventEmitter2>;
 
-  const mockCallsService = {
-    handleDriverResponse: jest.fn(),
-    updateAmbulanceLocation: jest.fn(),
+  const mockEventEmitter = {
+    emitAsync: jest.fn().mockResolvedValue([]),
   };
 
   const mockAmbulancesService = {
@@ -42,10 +41,6 @@ describe('DriverGateway', () => {
       providers: [
         DriverGateway,
         {
-          provide: CallsService,
-          useValue: mockCallsService,
-        },
-        {
           provide: AmbulancesService,
           useValue: mockAmbulancesService,
         },
@@ -57,14 +52,18 @@ describe('DriverGateway', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
+        },
       ],
     }).compile();
 
     gateway = module.get<DriverGateway>(DriverGateway);
-    callsService = module.get(CallsService);
     ambulancesService = module.get(AmbulancesService);
     jwtService = module.get(JwtService);
     configService = module.get(ConfigService);
+    eventEmitter = module.get(EventEmitter2);
 
     gateway.server = mockServer as any;
 
@@ -173,126 +172,72 @@ describe('DriverGateway', () => {
   });
 
   describe('onDriverRespond', () => {
-    it('should handle driver accepting call', async () => {
-      const mockPayload = {
-        sub: 'driver-123',
-        role: 'DRIVER',
-        egn: '1234567890',
-      };
-
+    it('should emit driver.responded event when driver accepts', async () => {
+      const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
       configService.get.mockReturnValue('test-secret');
       jwtService.verify.mockReturnValue(mockPayload);
 
       const client: DriverSocket = {
         id: 'socket-123',
-        handshake: {
-          headers: { authorization: 'Bearer valid-token' },
-        },
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
+      await gateway.onDriverRespond(client, { callId: 'call-123', accept: true });
 
-      const responseData = {
+      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith('driver.responded', {
         callId: 'call-123',
+        driverId: 'driver-123',
         accept: true,
-      };
-
-      await gateway.onDriverRespond(client, responseData);
-
-      expect(callsService.handleDriverResponse).toHaveBeenCalledWith(
-        'call-123',
-        'driver-123',
-        true,
-      );
+      });
     });
 
-    it('should handle driver rejecting call', async () => {
-      const mockPayload = {
-        sub: 'driver-456',
-        role: 'DRIVER',
-        egn: '0987654321',
-      };
-
+    it('should emit driver.responded event when driver rejects', async () => {
+      const mockPayload = { sub: 'driver-456', role: 'DRIVER' };
       configService.get.mockReturnValue('test-secret');
       jwtService.verify.mockReturnValue(mockPayload);
 
       const client: DriverSocket = {
         id: 'socket-456',
-        handshake: {
-          headers: { authorization: 'Bearer valid-token' },
-        },
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
+      await gateway.onDriverRespond(client, { callId: 'call-456', accept: false });
 
-      const responseData = {
+      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith('driver.responded', {
         callId: 'call-456',
+        driverId: 'driver-456',
         accept: false,
-      };
-
-      await gateway.onDriverRespond(client, responseData);
-
-      expect(callsService.handleDriverResponse).toHaveBeenCalledWith(
-        'call-456',
-        'driver-456',
-        false,
-      );
+      });
     });
   });
 
   describe('onLocationUpdate', () => {
-    it('should update ambulance location and emit route update', async () => {
-      const mockPayload = {
-        sub: 'driver-123',
-        role: 'DRIVER',
-        egn: '1234567890',
-      };
-
+    it('should emit driver.location.updated event with correct payload', async () => {
+      const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
       configService.get.mockReturnValue('test-secret');
       jwtService.verify.mockReturnValue(mockPayload);
 
       const client: DriverSocket = {
         id: 'socket-123',
-        handshake: {
-          headers: { authorization: 'Bearer valid-token' },
-        },
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
 
-      const mockCall = {
-        id: 'call-123',
-        user: { id: 'user-123' },
-        routePolyline: 'encoded-polyline',
-        estimatedDistance: 5000,
-        estimatedDuration: 600,
-        routeSteps: [],
-      };
-
-      callsService.updateAmbulanceLocation.mockResolvedValue(mockCall as any);
-
-      const locationData = {
+      await gateway.onLocationUpdate(client, {
         callId: 'call-123',
         latitude: 42.7,
         longitude: 23.3,
-      };
+      });
 
-      await gateway.onLocationUpdate(client, locationData);
-
-      expect(callsService.updateAmbulanceLocation).toHaveBeenCalledWith(
-        'call-123',
-        42.7,
-        23.3,
-      );
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
-      expect(mockServer.emit).toHaveBeenCalledWith(
-        'route.update',
-        expect.objectContaining({
-          callId: 'call-123',
-        }),
+      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+        'driver.location.updated',
+        { callId: 'call-123', latitude: 42.7, longitude: 23.3, driverId: 'driver-123' },
       );
     });
   });

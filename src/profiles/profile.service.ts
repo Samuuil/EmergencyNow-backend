@@ -14,7 +14,7 @@ import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Profile } from './entities/profile.entity';
 import { CreateProfileDto } from './dto/createProfile.dto';
 import { UpdateProfileDto } from './dto/updateProfile.dto';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 
 @Injectable()
 export class ProfilesService {
@@ -23,8 +23,7 @@ export class ProfilesService {
   constructor(
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(dto: CreateProfileDto): Promise<Profile> {
@@ -143,10 +142,7 @@ export class ProfilesService {
     dto: CreateProfileDto | UpdateProfileDto,
   ): Promise<Profile> {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        relations: ['profile'],
-      });
+      const user = await this.usersService.findByIdWithProfile(userId);
 
       if (!user) {
         throw new NotFoundException({
@@ -162,8 +158,7 @@ export class ProfilesService {
         const profile = this.profileRepository.create(dto);
         const savedProfile = await this.profileRepository.save(profile);
 
-        user.profile = savedProfile;
-        await this.userRepository.save(user);
+        await this.usersService.linkProfile(userId, savedProfile);
 
         return savedProfile;
       }
@@ -183,10 +178,7 @@ export class ProfilesService {
 
   async getProfileForUser(userId: string): Promise<Profile> {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        relations: ['profile'],
-      });
+      const user = await this.usersService.findByIdWithProfile(userId);
 
       if (!user) {
         throw new NotFoundException({
@@ -219,12 +211,7 @@ export class ProfilesService {
 
   async getProfileByEgn(egn: string): Promise<Profile> {
     try {
-      const user = await this.userRepository.findOne({
-        where: {
-          stateArchive: { egn },
-        },
-        relations: ['profile', 'stateArchive'],
-      });
+      const user = await this.usersService.findByEgnWithProfileAndStateArchive(egn);
 
       if (!user) {
         throw new NotFoundException({

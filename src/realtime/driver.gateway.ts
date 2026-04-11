@@ -7,10 +7,10 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Server } from 'socket.io';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
-import { CallsService } from '../calls/call.service';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -58,12 +58,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   >();
 
   constructor(
-    @Inject(forwardRef(() => CallsService))
-    private readonly callsService: CallsService,
-    @Inject(forwardRef(() => AmbulancesService))
     private readonly ambulancesService: AmbulancesService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   handleConnection(client: DriverSocket) {
@@ -116,11 +114,11 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const driverId = this.socketDrivers.get(client.id);
     if (!driverId) return;
-    await this.callsService.handleDriverResponse(
-      data.callId,
+    await this.eventEmitter.emitAsync('driver.responded', {
+      callId: data.callId,
       driverId,
-      data.accept,
-    );
+      accept: data.accept,
+    });
   }
 
   @SubscribeMessage('location.response')
@@ -169,34 +167,12 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       return;
     }
-    try {
-      const call = await this.callsService.updateAmbulanceLocation(
-        data.callId,
-        data.latitude,
-        data.longitude,
-      );
-      this.logger.log(
-        `[location.update] Updated call ${call.id}, userId=${call.user?.id}, will notify user`,
-      );
-      if (
-        call &&
-        call.routePolyline &&
-        call.estimatedDistance &&
-        call.estimatedDuration
-      ) {
-        this.emitToDriver(driverId, 'route.update', {
-          callId: call.id,
-          route: {
-            polyline: call.routePolyline,
-            distance: call.estimatedDistance,
-            duration: call.estimatedDuration,
-            steps: call.routeSteps || [],
-          },
-        });
-      }
-    } catch (e) {
-      this.logger.error(`Failed to handle location update`, e);
-    }
+    await this.eventEmitter.emitAsync('driver.location.updated', {
+      callId: data.callId,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      driverId,
+    });
   }
 
   offerCall(params: {

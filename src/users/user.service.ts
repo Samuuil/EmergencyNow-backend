@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { User } from './entities/user.entity';
+import { Profile } from '../profiles/entities/profile.entity';
 import { CreateUserDto } from './dto/createUser.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { Role } from '../common/enums/role.enum';
@@ -184,6 +185,44 @@ export class UsersService {
         message: UserErrorMessages[UserErrorCode.DATABASE_ERROR],
       });
     }
+  }
+
+  async exists(id: string): Promise<boolean> {
+    const count = await this.usersRepository.count({ where: { id } });
+    return count > 0;
+  }
+
+  async findByIdWithStateArchive(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: ['stateArchive'],
+    });
+  }
+
+  async findByIdWithProfile(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: ['profile'],
+    });
+  }
+
+  async linkProfile(userId: string, profile: Profile): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({
+        code: UserErrorCode.USER_NOT_FOUND,
+        message: UserErrorMessages[UserErrorCode.USER_NOT_FOUND],
+      });
+    }
+    user.profile = profile;
+    await this.usersRepository.save(user);
+  }
+
+  async findByEgnWithProfileAndStateArchive(egn: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { stateArchive: { egn } },
+      relations: ['profile', 'stateArchive'],
+    });
   }
 
   async findUserEgn(userId: string): Promise<{ egn: string }> {
