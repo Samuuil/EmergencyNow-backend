@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Ambulance } from './entities/ambulance.entity';
 import { User } from '../users/entities/user.entity';
@@ -502,15 +502,15 @@ export class AmbulancesService {
       )
       .getMany();
 
-    const removedDriverIds: string[] = [];
+    const removedDriverIds = inactiveAmbulances
+      .map((a) => a.driverId)
+      .filter((id): id is string => id !== null);
 
-    for (const ambulance of inactiveAmbulances) {
-      if (ambulance.driverId) {
-        removedDriverIds.push(ambulance.driverId);
-        ambulance.driverId = null;
-        ambulance.lastCallAcceptedAt = null;
-        await this.ambulanceRepository.save(ambulance);
-      }
+    if (removedDriverIds.length > 0) {
+      await this.ambulanceRepository.update(
+        { id: In(inactiveAmbulances.map((a) => a.id)) },
+        { driverId: null, lastCallAcceptedAt: null },
+      );
     }
 
     return removedDriverIds;

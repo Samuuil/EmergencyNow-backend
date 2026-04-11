@@ -49,7 +49,7 @@ export class UsersService {
         filterableColumns: {
           role: [FilterOperator.EQ],
         },
-        relations: ['profile', 'contacts', 'calls', 'stateArchive'],
+        relations: ['profile', 'stateArchive'],
         defaultLimit: 10,
         maxLimit: 100,
       });

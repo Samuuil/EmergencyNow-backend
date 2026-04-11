@@ -9,7 +9,7 @@ import {
   HospitalErrorMessages,
 } from './errors/hospital-errors.enum';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Hospital } from './entities/hospital.entity';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
@@ -229,29 +229,31 @@ export class HospitalsService {
       );
       this.logger.log(`Found ${places.length} hospitals from Google Places`);
 
-      for (const place of places) {
-        try {
-          const existing = await this.hospitalRepository.findOne({
-            where: { placeId: place.placeId },
-          });
+      const existingPlaceIds = new Set(
+        (
+          await this.hospitalRepository.find({
+            where: { placeId: In(places.map((p) => p.placeId)) },
+            select: ['placeId'],
+          })
+        ).map((h) => h.placeId),
+      );
 
-          if (!existing) {
-            await this.create({
-              name: place.name || 'Unknown Hospital',
-              address: place.address,
-              latitude: place.location.lat,
-              longitude: place.location.lng,
-              placeId: place.placeId,
-              isActive: true,
-            });
-          }
-        } catch (error) {
-          const err = error as Error;
-          this.logger.warn(
-            `Failed to sync hospital: ${place.name}`,
-            err.message || 'Unknown error',
-          );
-        }
+      const newHospitals = places
+        .filter((p) => !existingPlaceIds.has(p.placeId))
+        .map((p) =>
+          this.hospitalRepository.create({
+            name: p.name || 'Unknown Hospital',
+            address: p.address,
+            latitude: p.location.lat,
+            longitude: p.location.lng,
+            placeId: p.placeId,
+            isActive: true,
+          }),
+        );
+
+      if (newHospitals.length > 0) {
+        await this.hospitalRepository.save(newHospitals);
+        this.logger.log(`Inserted ${newHospitals.length} new hospital(s)`);
       }
     } catch (error) {
       this.logger.error(
