@@ -48,14 +48,19 @@ export class CallsService {
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
-    if (!user) throw new BadRequestException('User not found');
+    const fullUser = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: ['stateArchive'],
+    });
+
+    if (!fullUser) throw new BadRequestException('User not found');
 
     const call = this.callsRepository.create({
       description: dto.description,
       latitude: dto.latitude,
       longitude: dto.longitude,
-      user,
-      userEgn: dto.userEgn,
+      user: fullUser,
+      userEgn: fullUser.stateArchive?.egn ?? null,
       status: CallStatus.PENDING,
     });
 
@@ -67,7 +72,7 @@ export class CallsService {
       console.error('Failed to propose call to driver:', error);
     }
 
-    this.notifyEmergencyContactsAboutCall(user, savedCall).catch((err) =>
+    this.notifyEmergencyContactsAboutCall(fullUser, savedCall).catch((err) =>
       console.error('Failed to notify emergency contacts:', err),
     );
 
@@ -538,13 +543,9 @@ export class CallsService {
       return;
     }
 
-    const fullUser = await this.userRepository.findOne({
-      where: { id: user.id },
-      relations: ['stateArchive'],
-    });
     const userName =
-      fullUser?.stateArchive?.fullName ||
-      fullUser?.stateArchive?.email ||
+      user.stateArchive?.fullName ||
+      user.stateArchive?.email ||
       'A user';
 
     const emailPromises = contacts
