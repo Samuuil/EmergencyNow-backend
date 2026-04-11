@@ -267,13 +267,21 @@ export class AmbulancesService {
     }>,
   ): Promise<void> {
     if (updates.length === 0) return;
-    await Promise.all(
-      updates.map((u) =>
-        this.ambulanceRepository.update(u.ambulanceId, {
-          latitude: u.latitude,
-          longitude: u.longitude,
-        }),
-      ),
+
+    const params: (string | number)[] = [];
+    const valueList = updates
+      .map((u) => {
+        const base = params.length;
+        params.push(u.ambulanceId, u.latitude, u.longitude);
+        return `($${base + 1}::uuid, $${base + 2}::float, $${base + 3}::float)`;
+      })
+      .join(', ');
+
+    await this.ambulanceRepository.query(
+      `UPDATE ambulances SET latitude = v.lat, longitude = v.lng
+       FROM (VALUES ${valueList}) AS v(id, lat, lng)
+       WHERE ambulances.id = v.id`,
+      params,
     );
   }
 

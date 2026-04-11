@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { JwtModule } from '@nestjs/jwt';
 import { CallsService } from './call.service';
 import { CallsController } from './call.controller';
 import { Call } from './entities/call.entity';
@@ -23,7 +22,6 @@ import { RolesGuard } from '../auth/guards/roles.guard';
     RealtimeModule,
     AuthModule,
     ContactsModule,
-    JwtModule.register({}),
   ],
   controllers: [CallsController],
   providers: [CallsService, GoogleMapsService, JwtAuthGuard, RolesGuard],
