@@ -16,11 +16,12 @@ export class RefreshTokenStrategy extends PassportStrategy(
     private readonly redisService: RedisService,
     private readonly usersService: UsersService,
   ) {
+    const secret = configService.get<string>('JWT_REFRESH_SECRET');
+    if (!secret) throw new Error('JWT_REFRESH_SECRET must be configured');
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey:
-        configService.get<string>('JWT_REFRESH_SECRET') ||
-        'defaultRefreshSecret',
+      secretOrKey: secret,
       ignoreExpiration: false,
     });
   }

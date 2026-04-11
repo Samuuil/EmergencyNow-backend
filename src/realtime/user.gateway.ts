@@ -41,8 +41,11 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      const jwtSecret = this.config.get<string>('JWT_SECRET');
+      if (!jwtSecret) throw new Error('JWT_SECRET must be configured');
+
       const payload = this.jwt.verify<JwtPayload>(token, {
-        secret: this.config.get<string>('JWT_SECRET') || 'defaultSecret',
+        secret: jwtSecret,
       });
 
       client.user = {

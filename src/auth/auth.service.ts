@@ -81,11 +81,14 @@ export class AuthService {
     oldRefreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     let payload: { sub: string; [key: string]: any };
+    const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    if (!jwtRefreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET must be configured');
+    }
+
     try {
       payload = this.jwtService.verify(oldRefreshToken, {
-        secret:
-          this.configService.get<string>('JWT_REFRESH_SECRET') ||
-          'defaultRefreshSecret',
+        secret: jwtRefreshSecret,
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
@@ -109,12 +112,13 @@ export class AuthService {
   private async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    if (this.configService.get<string>('SABOTAGE') === 'TRUE') {
-      return {
-        accessToken: 'NqmaToken',
-        refreshToken: 'NqmaToken',
-      };
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+
+    if (!jwtSecret || !jwtRefreshSecret) {
+      throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be configured');
     }
+
     const payload = {
       sub: user.id,
       role: user.role,
@@ -122,14 +126,12 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_SECRET') || 'defaultSecret',
+      secret: jwtSecret,
       expiresIn: '1d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret:
-        this.configService.get<string>('JWT_REFRESH_SECRET') ||
-        'defaultRefreshSecret',
+      secret: jwtRefreshSecret,
       expiresIn: '30d',
     });
 
