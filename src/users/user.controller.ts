@@ -44,7 +44,7 @@ export class UsersController {
   }
 
   @Get('user-role/:id')
-  @Roles(Role.ADMIN)
+  //@Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get user role by user ID' })
   async findRole(@Param('id') id: string): Promise<string> {
     return await this.usersService.findUserRole(id);
