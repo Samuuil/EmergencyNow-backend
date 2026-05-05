@@ -12,7 +12,7 @@ describe('ContactsController', () => {
   const mockContact: Contact = {
     id: '123e4567-e89b-12d3-a456-426614174000',
     name: 'John Doe',
-    phoneNumber: '+1234567890',
+    phoneNumber: '+359881234567',
     email: 'john@example.com',
     user: {} as any,
   };
@@ -82,7 +82,7 @@ describe('ContactsController', () => {
   describe('createMyContact', () => {
     const createContactDto = {
       name: 'John Doe',
-      phoneNumber: '+1234567890',
+      phoneNumber: '+359881234567',
       email: 'john@example.com',
     };
 
@@ -122,7 +122,7 @@ describe('ContactsController', () => {
     const contactId = '123e4567-e89b-12d3-a456-426614174000';
     const updateContactDto = {
       name: 'Jane Doe',
-      phoneNumber: '+0987654321',
+      phoneNumber: '+359887654321',
     };
 
     it('should update current user contact', async () => {
@@ -196,7 +196,7 @@ describe('ContactsController', () => {
     const contactId = '123e4567-e89b-12d3-a456-426614174000';
     const updateContactDto = {
       name: 'Jane Doe',
-      phoneNumber: '+0987654321',
+      phoneNumber: '+359887654321',
     };
 
     it('should update a contact (admin only)', async () => {

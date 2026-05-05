@@ -21,7 +21,7 @@ describe('ContactsService', () => {
   const mockContact: Contact = {
     id: '123e4567-e89b-12d3-a456-426614174000',
     name: 'John Doe',
-    phoneNumber: '+1234567890',
+    phoneNumber: '+359881234567',
     email: 'john@example.com',
     user: {
       id: '123e4567-e89b-12d3-a456-426614174001',
@@ -146,7 +146,7 @@ describe('ContactsService', () => {
     const contactId = '123e4567-e89b-12d3-a456-426614174000';
     const updateContactDto = {
       name: 'Jane Doe',
-      phoneNumber: '+0987654321',
+      phoneNumber: '+359887654321',
     };
 
     it('should update a contact successfully', async () => {
@@ -280,7 +280,7 @@ describe('ContactsService', () => {
     const userId = '123e4567-e89b-12d3-a456-426614174001';
     const createContactDto = {
       name: 'John Doe',
-      phoneNumber: '+1234567890',
+      phoneNumber: '+359881234567',
       email: 'john@example.com',
     };
 

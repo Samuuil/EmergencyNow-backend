@@ -1,5 +1,6 @@
-import { IsString, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsOptional, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ContactErrorMessages, ContactErrorCode } from '../errors/contact-errors.enum';
 
 export class CreateContactDto {
   @ApiProperty({ description: 'Contact name', example: 'John Doe' })
@@ -7,10 +8,12 @@ export class CreateContactDto {
   name: string;
 
   @ApiProperty({
-    description: 'Contact phone number',
-    example: '+359888123456',
+    description: 'Contact phone number (Bulgarian format)',
+    example: '+359881234567',
   })
-  @IsString()
+  @Matches(/^(\+359|0)[0-9]{8,9}$/, {
+    message: ContactErrorMessages[ContactErrorCode.INVALID_PHONE_NUMBER],
+  })
   phoneNumber: string;
 
   @ApiPropertyOptional({
