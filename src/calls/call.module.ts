@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CallsService } from './call.service';
 import { CallQueueService } from './call-queue.service';
+import { CallCleanupService } from './call-cleanup.service';
 import { CallsController } from './call.controller';
 import { Call } from './entities/call.entity';
 import { AmbulancesModule } from '../ambulances/ambulance.module';
@@ -28,6 +29,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
   providers: [
     CallsService,
     CallQueueService,
+    CallCleanupService,
     GoogleMapsService,
     JwtAuthGuard,
     RolesGuard,

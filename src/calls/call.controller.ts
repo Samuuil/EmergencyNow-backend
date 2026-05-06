@@ -18,6 +18,7 @@ import { Paginate } from 'nestjs-paginate';
 import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
 import { CallsService } from './call.service';
+import { CallQueueService } from './call-queue.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
 import { LocationBodyDto } from './dto/location-body.dto';
@@ -36,7 +37,10 @@ import { Role } from '../common/enums/role.enum';
 @Controller('calls')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CallsController {
-  constructor(private readonly callsService: CallsService) {}
+  constructor(
+    private readonly callsService: CallsService,
+    private readonly callQueueService: CallQueueService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new emergency call' })
@@ -57,6 +61,14 @@ export class CallsController {
   @ApiQuery({ type: BasePaginationDto })
   findMyCalls(@CurrentUser() user: User, @Paginate() query: PaginateQuery) {
     return this.callsService.findByUser(user.id, query);
+  }
+
+  @Delete('stale')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Cancel all stale PENDING calls older than 1 hour' })
+  async cancelStaleCalls(): Promise<{ cancelled: string[] }> {
+    const cancelled = await this.callQueueService.cancelStalePendingCalls();
+    return { cancelled };
   }
 
   @Get('user/:userId')
