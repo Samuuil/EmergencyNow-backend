@@ -3,10 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Call } from './entities/call.entity';
 import { CreateCallDto } from './dto/createCall.dto';
@@ -26,6 +27,20 @@ import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 import { CallQueueService } from './call-queue.service';
+import {
+  CallErrorCode,
+  CallErrorMessages,
+} from './errors/call-errors.enum';
+
+// Slightly longer than DriverGateway.REJECTION_EXPIRY_MS so the rejection
+// has expired by the time the retry runs.
+const PROPOSE_RETRY_DELAY_MS = 35 * 1000;
+const ACTIVE_CALL_STATUSES = [
+  CallStatus.PENDING,
+  CallStatus.DISPATCHED,
+  CallStatus.EN_ROUTE,
+  CallStatus.ARRIVED,
+];
 
 interface DriverRespondedEvent {
   callId: string;
@@ -45,8 +60,9 @@ interface AmbulanceAvailableEvent {
 }
 
 @Injectable()
-export class CallsService {
+export class CallsService implements OnModuleDestroy {
   private readonly logger = new Logger(CallsService.name);
+  private readonly retryTimers = new Map<string, NodeJS.Timeout>();
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
@@ -67,6 +83,19 @@ export class CallsService {
 
     if (!fullUser) throw new BadRequestException('User not found');
 
+    const activeCall = await this.callsRepository.findOne({
+      where: {
+        user: { id: user.id },
+        status: In(ACTIVE_CALL_STATUSES),
+      },
+    });
+    if (activeCall) {
+      throw new BadRequestException({
+        code: CallErrorCode.USER_HAS_ACTIVE_CALL,
+        message: CallErrorMessages[CallErrorCode.USER_HAS_ACTIVE_CALL],
+        activeCallId: activeCall.id,
+      });
+    }
     const call = this.callsRepository.create({
       description: dto.description,
       latitude: dto.latitude,
@@ -195,9 +224,11 @@ export class CallsService {
 
     if (!candidate) {
       await this.notifyUserCallIsQueued(call);
+      this.scheduleRetry(callId);
       return false;
     }
 
+    this.cancelRetry(callId);
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
 
     this.driverGateway.offerCall({
@@ -288,6 +319,30 @@ export class CallsService {
     }
   }
 
+  private scheduleRetry(callId: string): void {
+    if (this.retryTimers.has(callId)) return;
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(callId);
+      this.proposeToNearestDriver(callId, true).catch((e) =>
+        this.logger.error(`Retry propose failed for call ${callId}`, e),
+      );
+    }, PROPOSE_RETRY_DELAY_MS);
+    this.retryTimers.set(callId, timer);
+    this.logger.log(
+      `Scheduled retry for call ${callId} in ${PROPOSE_RETRY_DELAY_MS}ms`,
+    );
+  }
+  private cancelRetry(callId: string): void {
+    const timer = this.retryTimers.get(callId);
+    if (timer) {
+      clearTimeout(timer);
+      this.retryTimers.delete(callId);
+    }
+  }
+  onModuleDestroy(): void {
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
+    this.retryTimers.clear();
+  }
   async handleDriverResponse(
     callId: string,
     driverId: string,
@@ -328,6 +383,7 @@ export class CallsService {
     await this.ambulancesService.updateLastCallAcceptedAt(ambulance.id);
     await this.callsRepository.save(call);
 
+    this.cancelRetry(callId);
     this.driverGateway.clearOffer(callId);
     this.driverGateway.sendRouteToDriver(driverId, {
       callId: call.id,
@@ -417,6 +473,9 @@ export class CallsService {
       call.arrivedAt = new Date();
     } else if (status === CallStatus.COMPLETED) {
       call.completedAt = new Date();
+      if (call.ambulance) {
+        await this.ambulancesService.markAsAvailable(call.ambulance.id);
+      }
     } else if (status === CallStatus.EN_ROUTE && !call.dispatchedAt) {
       call.dispatchedAt = new Date();
     }
@@ -427,7 +486,15 @@ export class CallsService {
     if (status === CallStatus.COMPLETED && savedCall.ambulance) {
       await this.ambulancesService.markAsAvailable(savedCall.ambulance.id);
     }
-
+    if (
+      status === CallStatus.COMPLETED ||
+      status === CallStatus.CANCELLED ||
+      status === CallStatus.DISPATCHED ||
+      status === CallStatus.ARRIVED ||
+      status === CallStatus.EN_ROUTE
+    ) {
+      this.cancelRetry(callId);
+    }
     if (call.user?.id) {
       this.userGateway.notifyStatusChange(call.user.id, {
         callId: call.id,
@@ -542,6 +609,7 @@ export class CallsService {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
 
+    this.cancelRetry(id);
     this.driverGateway.clearOffer(id);
 
     await this.callsRepository.remove(call);
