@@ -14,6 +14,7 @@ import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
+import { CallQueueService } from './call-queue.service';
 
 describe('CallsService', () => {
   let service: CallsService;
@@ -90,6 +91,14 @@ describe('CallsService', () => {
         {
           provide: ContactsService,
           useValue: {},
+        },
+        {
+          provide: CallQueueService,
+          useValue: {
+            getPendingCallsOldestFirst: jest.fn().mockResolvedValue([]),
+            getPosition: jest.fn().mockResolvedValue(0),
+            getQueueSize: jest.fn().mockResolvedValue(0),
+          },
         },
       ],
     }).compile();

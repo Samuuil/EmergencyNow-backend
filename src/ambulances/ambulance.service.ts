@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -37,6 +38,7 @@ export class AmbulancesService {
     private readonly ambulanceRepository: Repository<Ambulance>,
     private readonly usersService: UsersService,
     private readonly googleMapsService: GoogleMapsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(dto: CreateAmbulanceDto, driverId?: string): Promise<Ambulance> {
@@ -387,8 +389,19 @@ export class AmbulancesService {
   async markAsAvailable(id: string): Promise<Ambulance> {
     try {
       const ambulance = await this.findOne(id);
+      const wasUnavailable = !ambulance.available;
       ambulance.available = true;
-      return await this.ambulanceRepository.save(ambulance);
+      const saved = await this.ambulanceRepository.save(ambulance);
+
+      if (wasUnavailable) {
+        this.eventEmitter
+          .emitAsync('ambulance.available', { ambulanceId: saved.id })
+          .catch((err) =>
+            this.logger.error('Failed to emit ambulance.available event', err),
+          );
+      }
+
+      return saved;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
