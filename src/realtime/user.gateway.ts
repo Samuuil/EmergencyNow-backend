@@ -125,6 +125,17 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'call.status', payload);
   }
 
+  notifyCallQueued(
+    userId: string,
+    payload: {
+      callId: string;
+      position: number;
+      queueSize: number;
+    },
+  ) {
+    this.emitToUser(userId, 'call.queued', payload);
+  }
+
   isUserOnline(userId: string): boolean {
     return this.userSockets.has(userId);
   }

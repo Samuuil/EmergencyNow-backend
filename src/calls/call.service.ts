@@ -25,6 +25,7 @@ import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
+import { CallQueueService } from './call-queue.service';
 
 interface DriverRespondedEvent {
   callId: string;
@@ -37,6 +38,10 @@ interface DriverLocationUpdatedEvent {
   latitude: number;
   longitude: number;
   driverId: string;
+}
+
+interface AmbulanceAvailableEvent {
+  ambulanceId: string;
 }
 
 @Injectable()
@@ -54,6 +59,7 @@ export class CallsService {
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
     private readonly contactsService: ContactsService,
+    private readonly callQueueService: CallQueueService,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -136,13 +142,23 @@ export class CallsService {
   private async proposeToNearestDriver(
     callId: string,
     skipLocationRefresh = false,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const call = await this.callsRepository.findOne({
       where: { id: callId },
       relations: ['user', 'user.stateArchive', 'ambulance'],
     });
 
-    if (!call) return;
+    if (!call) return false;
+
+    if (
+      call.status === CallStatus.COMPLETED ||
+      call.status === CallStatus.CANCELLED ||
+      call.status === CallStatus.DISPATCHED ||
+      call.status === CallStatus.EN_ROUTE ||
+      call.status === CallStatus.ARRIVED
+    ) {
+      return false;
+    }
 
     if (!skipLocationRefresh) {
       this.driverGateway.refreshAvailableAmbulanceLocations().catch((error) =>
@@ -178,7 +194,8 @@ export class CallsService {
     );
 
     if (!candidate) {
-      return;
+      await this.notifyUserCallIsQueued(call);
+      return false;
     }
 
     this.driverGateway.setPendingAmbulance(callId, candidate.id);
@@ -193,6 +210,82 @@ export class CallsService {
       distance: candidate.distance,
       duration: candidate.duration,
     });
+
+    return true;
+  }
+
+  private async notifyUserCallIsQueued(call: Call): Promise<void> {
+    if (!call.user?.id) return;
+    try {
+      const [position, queueSize] = await Promise.all([
+        this.callQueueService.getPosition(call.id),
+        this.callQueueService.getQueueSize(),
+      ]);
+      this.userGateway.notifyCallQueued(call.user.id, {
+        callId: call.id,
+        position,
+        queueSize,
+      });
+      this.logger.log(
+        `Call ${call.id} queued for user ${call.user.id} at position ${position}/${queueSize}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to notify user about queued call ${call.id}: ${error}`,
+      );
+    }
+  }
+
+  @OnEvent('ambulance.available')
+  async onAmbulanceAvailable(event: AmbulanceAvailableEvent): Promise<void> {
+    try {
+      await this.processQueue(event.ambulanceId);
+    } catch (e) {
+      this.logger.error(
+        `Failed to process queue after ambulance ${event.ambulanceId} became available`,
+        e,
+      );
+    }
+  }
+
+  async processQueue(triggeringAmbulanceId?: string): Promise<void> {
+    const pending = await this.callQueueService.getPendingCallsOldestFirst();
+    if (pending.length === 0) return;
+
+    this.logger.log(
+      `Processing call queue (${pending.length} pending)` +
+        (triggeringAmbulanceId
+          ? ` triggered by ambulance ${triggeringAmbulanceId}`
+          : ''),
+    );
+
+    for (const call of pending) {
+      if (await this.hasActiveOffer(call.id)) continue;
+      const offered = await this.proposeToNearestDriver(call.id, true);
+      if (offered) {
+        // We've consumed the freshly available driver slot; stop here.
+        break;
+      }
+    }
+  }
+
+  private async hasActiveOffer(callId: string): Promise<boolean> {
+    const pendingAmbulanceId =
+      this.driverGateway.getPendingAmbulanceId(callId);
+    if (!pendingAmbulanceId) return false;
+
+    const rejected = new Set(
+      this.driverGateway.getRejectedAmbulanceIds(callId),
+    );
+    if (rejected.has(pendingAmbulanceId)) return false;
+
+    try {
+      const ambulance = await this.ambulancesService.findOne(pendingAmbulanceId);
+      if (!ambulance.driverId) return false;
+      return this.driverGateway.isDriverOnline(ambulance.driverId);
+    } catch {
+      return false;
+    }
   }
 
   async handleDriverResponse(
@@ -446,6 +539,8 @@ export class CallsService {
     if (call.ambulance && call.status !== CallStatus.COMPLETED) {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
+
+    this.driverGateway.clearOffer(id);
 
     await this.callsRepository.remove(call);
   }

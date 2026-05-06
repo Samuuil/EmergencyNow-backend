@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CallsService } from './call.service';
+import { CallQueueService } from './call-queue.service';
 import { CallsController } from './call.controller';
 import { Call } from './entities/call.entity';
 import { AmbulancesModule } from '../ambulances/ambulance.module';
@@ -24,7 +25,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
     ContactsModule,
   ],
   controllers: [CallsController],
-  providers: [CallsService, GoogleMapsService, JwtAuthGuard, RolesGuard],
+  providers: [
+    CallsService,
+    CallQueueService,
+    GoogleMapsService,
+    JwtAuthGuard,
+    RolesGuard,
+  ],
   exports: [CallsService],
 })
 export class CallsModule {}
