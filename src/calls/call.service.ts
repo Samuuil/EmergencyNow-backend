@@ -417,14 +417,16 @@ export class CallsService {
       call.arrivedAt = new Date();
     } else if (status === CallStatus.COMPLETED) {
       call.completedAt = new Date();
-      if (call.ambulance) {
-        await this.ambulancesService.markAsAvailable(call.ambulance.id);
-      }
     } else if (status === CallStatus.EN_ROUTE && !call.dispatchedAt) {
       call.dispatchedAt = new Date();
     }
 
+    // Save status to DB first so queue processing sees the updated status.
     const savedCall = await this.callsRepository.save(call);
+
+    if (status === CallStatus.COMPLETED && savedCall.ambulance) {
+      await this.ambulancesService.markAsAvailable(savedCall.ambulance.id);
+    }
 
     if (call.user?.id) {
       this.userGateway.notifyStatusChange(call.user.id, {
