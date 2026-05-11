@@ -276,22 +276,6 @@ describe('CallsController', () => {
     });
   });
 
-  describe('dispatchAmbulance', () => {
-    const callId = 'call-123';
-
-    it('should dispatch ambulance', async () => {
-      const dispatchedCall = {
-        ...mockCall,
-        status: CallStatus.DISPATCHED,
-      };
-      service.dispatchNearestAmbulance.mockResolvedValue(dispatchedCall);
-
-      const result = await controller.dispatchAmbulance(callId);
-
-      expect(result).toEqual(dispatchedCall);
-      expect(service.dispatchNearestAmbulance).toHaveBeenCalledWith(callId);
-    });
-  });
 
   describe('updateAmbulanceLocation', () => {
     const callId = 'call-123';

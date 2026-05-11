@@ -14,7 +14,8 @@ import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
-import { CallQueueService } from './call-queue.service';
+import { DispatcherService } from '../dispatchers/dispatcher.service';
+import { UsersService } from '../users/user.service';
 
 describe('CallsService', () => {
   let service: CallsService;
@@ -93,11 +94,19 @@ describe('CallsService', () => {
           useValue: {},
         },
         {
-          provide: CallQueueService,
+          provide: DispatcherService,
           useValue: {
-            getPendingCallsOldestFirst: jest.fn().mockResolvedValue([]),
-            getPosition: jest.fn().mockResolvedValue(0),
-            getQueueSize: jest.fn().mockResolvedValue(0),
+            routeCall: jest.fn(),
+            onDriverAccepted: jest.fn(),
+            onDriverRejected: jest.fn(),
+            notifyCallCancelled: jest.fn(),
+            handleAssignAmbulanceRequest: jest.fn(),
+          },
+        },
+        {
+          provide: UsersService,
+          useValue: {
+            findByIdWithStateArchive: jest.fn(),
           },
         },
       ],
@@ -400,7 +409,7 @@ describe('CallsService', () => {
     });
   });
 
-  describe('dispatchNearestAmbulance', () => {
+  describe('dispatchToAmbulanceManually', () => {
     it('should throw BadRequestException when call is completed', async () => {
       const completedCall = {
         ...mockCall,
@@ -408,9 +417,9 @@ describe('CallsService', () => {
       };
       callsRepository.findOne.mockResolvedValue(completedCall);
 
-      await expect(service.dispatchNearestAmbulance('call-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.dispatchToAmbulanceManually('call-1', 'amb-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException when call is cancelled', async () => {
@@ -420,9 +429,9 @@ describe('CallsService', () => {
       };
       callsRepository.findOne.mockResolvedValue(cancelledCall);
 
-      await expect(service.dispatchNearestAmbulance('call-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.dispatchToAmbulanceManually('call-1', 'amb-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
