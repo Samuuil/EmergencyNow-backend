@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { UsersService } from '../users/user.service';
 import { StateArchiveService } from '../state-archive/state-archive.service';
 import { MailService } from './services/mail.service';
@@ -80,7 +81,7 @@ export class AuthService {
   async refreshToken(
     oldRefreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    let payload: { sub: string; [key: string]: any };
+    let payload: { sub: string; jti: string; [key: string]: any };
     const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
     if (!jwtRefreshSecret) {
       throw new Error('JWT_REFRESH_SECRET must be configured');
@@ -94,23 +95,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const storedToken = await this.redisService.getRefreshToken(payload.sub);
-
-    if (!storedToken || storedToken !== oldRefreshToken) {
+    if (!payload.jti) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const user = await this.usersService.findOne(payload.sub);
+    const valid = await this.redisService.validateRefreshJti(payload.jti);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid or revoked refresh token');
+    }
 
+    const user = await this.usersService.findOne(payload.sub);
     if (!user) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return this.generateTokens(user);
+    return this.generateTokens(user, payload.jti);
   }
 
   private async generateTokens(
     user: User,
+    oldJti?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
     const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
@@ -119,28 +123,29 @@ export class AuthService {
       throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be configured');
     }
 
-    const payload = {
-      sub: user.id,
-      role: user.role,
-    };
+    const jti = randomUUID();
 
-    const accessToken = this.jwtService.sign(payload, {
-      secret: jwtSecret,
-      expiresIn: '1d',
-    });
+    const accessToken = this.jwtService.sign(
+      { sub: user.id, role: user.role },
+      { secret: jwtSecret, expiresIn: '1d' },
+    );
 
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: jwtRefreshSecret,
-      expiresIn: '30d',
-    });
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, role: user.role, jti },
+      { secret: jwtRefreshSecret, expiresIn: '30d' },
+    );
 
-    await this.redisService.addRefreshToken(user.id, refreshToken);
+    if (oldJti) {
+      await this.redisService.rotateRefreshJti(oldJti, user.id, jti);
+    } else {
+      await this.redisService.storeRefreshJti(user.id, jti);
+    }
 
     return { accessToken, refreshToken };
   }
 
   async logout(userId: string): Promise<{ message: string }> {
-    await this.redisService.removeRefreshToken(userId);
+    await this.redisService.removeRefreshJti(userId);
     return { message: 'Logged out successfully' };
   }
 }

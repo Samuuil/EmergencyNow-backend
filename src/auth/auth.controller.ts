@@ -6,16 +6,12 @@ import { InitiateLoginDto } from './dto/initiate-login.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Auth')
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private configService: ConfigService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('initiate-login')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
