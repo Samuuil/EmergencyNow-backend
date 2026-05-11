@@ -58,20 +58,32 @@ export class RedisService implements OnModuleDestroy {
     return await this.client.ttl(key);
   }
 
-  async addRefreshToken(userId: string, refreshToken: string): Promise<string> {
-    const key = `refresh-token:${userId}`;
-    await this.client.set(key, refreshToken, 'EX', 2592000);
-    return refreshToken;
+  private static readonly REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
+
+  async storeRefreshJti(userId: string, jti: string): Promise<void> {
+    await Promise.all([
+      this.client.setex(`refresh:jti:${jti}`, RedisService.REFRESH_TTL, userId),
+      this.client.setex(`refresh:user:${userId}`, RedisService.REFRESH_TTL, jti),
+    ]);
   }
 
-  async getRefreshToken(userId: string): Promise<string | null> {
-    const key = `refresh-token:${userId}`;
-    const token = await this.client.get(key);
-    return token ? token : null;
+  async validateRefreshJti(jti: string): Promise<boolean> {
+    const result = await this.client.exists(`refresh:jti:${jti}`);
+    return result === 1;
   }
 
-  async removeRefreshToken(userId: string): Promise<void> {
-    const key = `refresh-token:${userId}`;
-    await this.client.del(key);
+  async removeRefreshJti(userId: string): Promise<void> {
+    const jti = await this.client.getdel(`refresh:user:${userId}`);
+    if (jti) {
+      await this.client.del(`refresh:jti:${jti}`);
+    }
+  }
+
+  async rotateRefreshJti(oldJti: string, userId: string, newJti: string): Promise<void> {
+    await Promise.all([
+      this.client.del(`refresh:jti:${oldJti}`),
+      this.client.setex(`refresh:jti:${newJti}`, RedisService.REFRESH_TTL, userId),
+      this.client.setex(`refresh:user:${userId}`, RedisService.REFRESH_TTL, newJti),
+    ]);
   }
 }
