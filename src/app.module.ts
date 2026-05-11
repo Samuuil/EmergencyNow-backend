@@ -17,6 +17,7 @@ import { ContactsModule } from './contacts/contact.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SeedingModule } from './seeding/seeding.module';
+import { DispatchersModule } from './dispatchers/dispatcher.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { SeedingModule } from './seeding/seeding.module';
     HospitalsModule,
     RealtimeModule,
     SeedingModule,
+    DispatchersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

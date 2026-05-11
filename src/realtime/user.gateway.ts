@@ -125,7 +125,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'call.status', payload);
   }
 
-  notifyCallQueued(
+  notifyCallAwaitingDispatcher(
     userId: string,
     payload: {
       callId: string;
@@ -133,7 +133,14 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
       queueSize: number;
     },
   ) {
-    this.emitToUser(userId, 'call.queued', payload);
+    this.emitToUser(userId, 'call.awaiting-dispatcher', payload);
+  }
+
+  notifyCallWithDispatcher(
+    userId: string,
+    payload: { callId: string },
+  ) {
+    this.emitToUser(userId, 'call.with-dispatcher', payload);
   }
 
   isUserOnline(userId: string): boolean {

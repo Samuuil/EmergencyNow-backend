@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DriverGateway } from './driver.gateway';
 import { UserGateway } from './user.gateway';
+import { DispatcherGateway } from './dispatcher.gateway';
 import { AmbulancesModule } from '../ambulances/ambulance.module';
 import { AuthModule } from '../auth/auth.module';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
@@ -22,7 +23,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       },
     }),
   ],
-  providers: [DriverGateway, UserGateway, WsJwtGuard],
-  exports: [DriverGateway, UserGateway],
+  providers: [DriverGateway, UserGateway, DispatcherGateway, WsJwtGuard],
+  exports: [DriverGateway, UserGateway, DispatcherGateway],
 })
 export class RealtimeModule {}

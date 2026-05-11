@@ -18,7 +18,7 @@ import { Paginate } from 'nestjs-paginate';
 import type { PaginateQuery } from 'nestjs-paginate';
 import { BasePaginationDto } from '../common/dtos';
 import { CallsService } from './call.service';
-import { CallQueueService } from './call-queue.service';
+import { CallCleanupService } from './call-cleanup.service';
 import { CreateCallDto } from './dto/createCall.dto';
 import { UpdateCallDto } from './dto/updateCall.dto';
 import { LocationBodyDto } from './dto/location-body.dto';
@@ -39,7 +39,7 @@ import { Role } from '../common/enums/role.enum';
 export class CallsController {
   constructor(
     private readonly callsService: CallsService,
-    private readonly callQueueService: CallQueueService,
+    private readonly callCleanupService: CallCleanupService,
   ) {}
 
   @Post()
@@ -49,7 +49,7 @@ export class CallsController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.DRIVER)
+  @Roles(Role.ADMIN, Role.DRIVER, Role.DISPATCHER)
   @ApiOperation({ summary: 'Get all calls' })
   @ApiQuery({ type: BasePaginationDto })
   findAll(@Paginate() query: PaginateQuery) {
@@ -67,12 +67,12 @@ export class CallsController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Cancel all stale PENDING calls older than 1 hour' })
   async cancelStaleCalls(): Promise<{ cancelled: string[] }> {
-    const cancelled = await this.callQueueService.cancelStalePendingCalls();
+    const cancelled = await this.callCleanupService.cancelStalePendingCalls();
     return { cancelled };
   }
 
   @Get('user/:userId')
-  @Roles(Role.ADMIN, Role.DRIVER)
+  @Roles(Role.ADMIN, Role.DRIVER, Role.DISPATCHER)
   @ApiOperation({ summary: 'Get all calls for a specific user' })
   @ApiQuery({ type: BasePaginationDto })
   findByUser(
@@ -83,14 +83,14 @@ export class CallsController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.DRIVER)
+  @Roles(Role.ADMIN, Role.DRIVER, Role.DISPATCHER)
   @ApiOperation({ summary: 'Get call by ID' })
   findOne(@Param('id') id: string): Promise<Call> {
     return this.callsService.findOne(id);
   }
 
   @Get(':id/tracking')
-  @Roles(Role.ADMIN, Role.DRIVER)
+  @Roles(Role.ADMIN, Role.DRIVER, Role.DISPATCHER)
   @ApiOperation({ summary: 'Get tracking data for call' })
   getTrackingData(@Param('id') id: string) {
     return this.callsService.getTrackingData(id);
@@ -130,13 +130,6 @@ export class CallsController {
   @ApiOperation({ summary: 'Get route to selected hospital' })
   getHospitalRoute(@Param('id') id: string) {
     return this.callsService.getHospitalRouteData(id);
-  }
-
-  @Post(':id/dispatch')
-  @Roles(Role.ADMIN, Role.DRIVER)
-  @ApiOperation({ summary: 'Dispatch nearest ambulance to call' })
-  dispatchAmbulance(@Param('id') id: string): Promise<Call> {
-    return this.callsService.dispatchNearestAmbulance(id);
   }
 
   @Patch(':id/location')

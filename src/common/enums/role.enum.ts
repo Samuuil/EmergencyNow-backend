@@ -3,4 +3,5 @@ export enum Role {
   USER = 'USER',
   DRIVER = 'DRIVER',
   DOCTOR = 'DOCTOR',
+  DISPATCHER = 'DISPATCHER',
 }

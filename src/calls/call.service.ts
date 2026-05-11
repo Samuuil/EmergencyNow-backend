@@ -3,7 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
-  OnModuleDestroy,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -26,15 +27,12 @@ import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
-import { CallQueueService } from './call-queue.service';
+import { DispatcherService } from '../dispatchers/dispatcher.service';
 import {
   CallErrorCode,
   CallErrorMessages,
 } from './errors/call-errors.enum';
 
-// Slightly longer than DriverGateway.REJECTION_EXPIRY_MS so the rejection
-// has expired by the time the retry runs.
-const PROPOSE_RETRY_DELAY_MS = 35 * 1000;
 const ACTIVE_CALL_STATUSES = [
   CallStatus.PENDING,
   CallStatus.DISPATCHED,
@@ -55,14 +53,10 @@ interface DriverLocationUpdatedEvent {
   driverId: string;
 }
 
-interface AmbulanceAvailableEvent {
-  ambulanceId: string;
-}
-
 @Injectable()
-export class CallsService implements OnModuleDestroy {
+export class CallsService {
   private readonly logger = new Logger(CallsService.name);
-  private readonly retryTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
@@ -75,7 +69,8 @@ export class CallsService implements OnModuleDestroy {
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
     private readonly contactsService: ContactsService,
-    private readonly callQueueService: CallQueueService,
+    @Inject(forwardRef(() => DispatcherService))
+    private readonly dispatcherService: DispatcherService,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -108,9 +103,9 @@ export class CallsService implements OnModuleDestroy {
     const savedCall = await this.callsRepository.save(call);
 
     try {
-      await this.proposeToNearestDriver(savedCall.id);
+      await this.dispatcherService.routeCall(savedCall);
     } catch (error) {
-      this.logger.error('Failed to propose call to driver:', error);
+      this.logger.error('Failed to route call to a dispatcher:', error);
     }
 
     this.notifyEmergencyContactsAboutCall(fullUser, savedCall).catch((err) =>
@@ -156,7 +151,10 @@ export class CallsService implements OnModuleDestroy {
     }
   }
 
-  async dispatchNearestAmbulance(callId: string): Promise<Call> {
+  async dispatchToAmbulanceManually(
+    callId: string,
+    ambulanceId: string,
+  ): Promise<Call> {
     const call = await this.findOne(callId);
     if (
       call.status === CallStatus.COMPLETED ||
@@ -164,185 +162,20 @@ export class CallsService implements OnModuleDestroy {
     ) {
       throw new BadRequestException('Call is already completed or cancelled');
     }
-    await this.proposeToNearestDriver(callId);
+    // Admin override: route directly to a specific ambulance, bypassing dispatcher.
+    if (!call.assignedDispatcherId) {
+      throw new BadRequestException(
+        'Call must be assigned to a dispatcher first (admin override path only)',
+      );
+    }
+    await this.dispatcherService.handleAssignAmbulanceRequest(
+      call.assignedDispatcherId,
+      callId,
+      ambulanceId,
+    );
     return call;
   }
 
-  private async proposeToNearestDriver(
-    callId: string,
-    skipLocationRefresh = false,
-  ): Promise<boolean> {
-    const call = await this.callsRepository.findOne({
-      where: { id: callId },
-      relations: ['user', 'user.stateArchive', 'ambulance'],
-    });
-
-    if (!call) return false;
-
-    if (
-      call.status === CallStatus.COMPLETED ||
-      call.status === CallStatus.CANCELLED ||
-      call.status === CallStatus.DISPATCHED ||
-      call.status === CallStatus.EN_ROUTE ||
-      call.status === CallStatus.ARRIVED
-    ) {
-      return false;
-    }
-
-    if (!skipLocationRefresh) {
-      this.driverGateway.refreshAvailableAmbulanceLocations().catch((error) =>
-        this.logger.error('Failed to broadcast location requests:', error),
-      );
-    }
-
-    const excludedIds = new Set(
-      this.driverGateway.getRejectedAmbulanceIds(callId),
-    );
-
-    if (call.user?.stateArchive?.egn) {
-      const ambulancesWithMatchingDriverEgn =
-        await this.ambulancesService.findAvailableWithDriverEgn(
-          call.user.stateArchive.egn,
-        );
-      ambulancesWithMatchingDriverEgn.forEach((amb) => excludedIds.add(amb.id));
-    }
-
-    const allAvailable = await this.ambulancesService.findAvailableList();
-    const candidates = allAvailable.filter(
-      (amb) =>
-        amb.latitude != null &&
-        amb.longitude != null &&
-        !excludedIds.has(amb.id) &&
-        amb.driverId != null &&
-        this.driverGateway.isDriverOnline(amb.driverId),
-    );
-
-    const candidate = await this.ambulancesService.findNearestFromList(
-      candidates,
-      { latitude: call.latitude, longitude: call.longitude },
-    );
-
-    if (!candidate) {
-      await this.notifyUserCallIsQueued(call);
-      this.scheduleRetry(callId);
-      return false;
-    }
-
-    this.cancelRetry(callId);
-    this.driverGateway.setPendingAmbulance(callId, candidate.id);
-
-    this.driverGateway.offerCall({
-      callId: call.id,
-      description: call.description,
-      latitude: call.latitude,
-      longitude: call.longitude,
-      ambulanceId: candidate.id,
-      driverId: candidate.driverId!,
-      distance: candidate.distance,
-      duration: candidate.duration,
-    });
-
-    return true;
-  }
-
-  private async notifyUserCallIsQueued(call: Call): Promise<void> {
-    if (!call.user?.id) return;
-    try {
-      const [position, queueSize] = await Promise.all([
-        this.callQueueService.getPosition(call.id),
-        this.callQueueService.getQueueSize(),
-      ]);
-      this.userGateway.notifyCallQueued(call.user.id, {
-        callId: call.id,
-        position,
-        queueSize,
-      });
-      this.logger.log(
-        `Call ${call.id} queued for user ${call.user.id} at position ${position}/${queueSize}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to notify user about queued call ${call.id}: ${error}`,
-      );
-    }
-  }
-
-  @OnEvent('ambulance.available')
-  async onAmbulanceAvailable(event: AmbulanceAvailableEvent): Promise<void> {
-    try {
-      await this.processQueue(event.ambulanceId);
-    } catch (e) {
-      this.logger.error(
-        `Failed to process queue after ambulance ${event.ambulanceId} became available`,
-        e,
-      );
-    }
-  }
-
-  async processQueue(triggeringAmbulanceId?: string): Promise<void> {
-    const pending = await this.callQueueService.getPendingCallsOldestFirst();
-    if (pending.length === 0) return;
-
-    this.logger.log(
-      `Processing call queue (${pending.length} pending)` +
-        (triggeringAmbulanceId
-          ? ` triggered by ambulance ${triggeringAmbulanceId}`
-          : ''),
-    );
-
-    for (const call of pending) {
-      if (await this.hasActiveOffer(call.id)) continue;
-      const offered = await this.proposeToNearestDriver(call.id, true);
-      if (offered) {
-        // We've consumed the freshly available driver slot; stop here.
-        break;
-      }
-    }
-  }
-
-  private async hasActiveOffer(callId: string): Promise<boolean> {
-    const pendingAmbulanceId =
-      this.driverGateway.getPendingAmbulanceId(callId);
-    if (!pendingAmbulanceId) return false;
-
-    const rejected = new Set(
-      this.driverGateway.getRejectedAmbulanceIds(callId),
-    );
-    if (rejected.has(pendingAmbulanceId)) return false;
-
-    try {
-      const ambulance = await this.ambulancesService.findOne(pendingAmbulanceId);
-      if (!ambulance.driverId) return false;
-      return this.driverGateway.isDriverOnline(ambulance.driverId);
-    } catch {
-      return false;
-    }
-  }
-
-  private scheduleRetry(callId: string): void {
-    if (this.retryTimers.has(callId)) return;
-    const timer = setTimeout(() => {
-      this.retryTimers.delete(callId);
-      this.proposeToNearestDriver(callId, true).catch((e) =>
-        this.logger.error(`Retry propose failed for call ${callId}`, e),
-      );
-    }, PROPOSE_RETRY_DELAY_MS);
-    this.retryTimers.set(callId, timer);
-    this.logger.log(
-      `Scheduled retry for call ${callId} in ${PROPOSE_RETRY_DELAY_MS}ms`,
-    );
-  }
-  private cancelRetry(callId: string): void {
-    const timer = this.retryTimers.get(callId);
-    if (timer) {
-      clearTimeout(timer);
-      this.retryTimers.delete(callId);
-    }
-  }
-  onModuleDestroy(): void {
-    for (const timer of this.retryTimers.values()) clearTimeout(timer);
-    this.retryTimers.clear();
-  }
   async handleDriverResponse(
     callId: string,
     driverId: string,
@@ -360,7 +193,8 @@ export class CallsService implements OnModuleDestroy {
 
     if (!accept) {
       this.driverGateway.addRejection(callId, ambulance.id);
-      await this.proposeToNearestDriver(callId, true);
+      this.driverGateway.clearOffer(callId);
+      await this.dispatcherService.onDriverRejected(callId, ambulance.id);
       return;
     }
 
@@ -378,13 +212,16 @@ export class CallsService implements OnModuleDestroy {
     call.ambulanceCurrentLatitude = ambulance.latitude!;
     call.ambulanceCurrentLongitude = ambulance.longitude!;
     call.dispatchedAt = new Date();
+    call.assignedDispatcherId = null;
+    call.dispatcherAssignedAt = null;
 
     await this.ambulancesService.markAsDispatched(ambulance.id);
     await this.ambulancesService.updateLastCallAcceptedAt(ambulance.id);
     await this.callsRepository.save(call);
 
-    this.cancelRetry(callId);
     this.driverGateway.clearOffer(callId);
+    await this.dispatcherService.onDriverAccepted(callId, ambulance.id);
+
     this.driverGateway.sendRouteToDriver(driverId, {
       callId: call.id,
       route: {
@@ -466,6 +303,7 @@ export class CallsService implements OnModuleDestroy {
 
   async updateStatus(callId: string, status: CallStatus): Promise<Call> {
     const call = await this.findOne(callId);
+    const previousStatus = call.status;
 
     call.status = status;
 
@@ -480,21 +318,20 @@ export class CallsService implements OnModuleDestroy {
       call.dispatchedAt = new Date();
     }
 
-    // Save status to DB first so queue processing sees the updated status.
     const savedCall = await this.callsRepository.save(call);
 
     if (status === CallStatus.COMPLETED && savedCall.ambulance) {
       await this.ambulancesService.markAsAvailable(savedCall.ambulance.id);
     }
+
     if (
-      status === CallStatus.COMPLETED ||
-      status === CallStatus.CANCELLED ||
-      status === CallStatus.DISPATCHED ||
-      status === CallStatus.ARRIVED ||
-      status === CallStatus.EN_ROUTE
+      (status === CallStatus.CANCELLED || status === CallStatus.COMPLETED) &&
+      previousStatus === CallStatus.PENDING
     ) {
-      this.cancelRetry(callId);
+      // Call was cancelled/completed while still in dispatcher hands.
+      await this.dispatcherService.notifyCallCancelled(callId);
     }
+
     if (call.user?.id) {
       this.userGateway.notifyStatusChange(call.user.id, {
         callId: call.id,
@@ -609,8 +446,8 @@ export class CallsService implements OnModuleDestroy {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
 
-    this.cancelRetry(id);
     this.driverGateway.clearOffer(id);
+    await this.dispatcherService.notifyCallCancelled(id);
 
     await this.callsRepository.remove(call);
   }

@@ -34,6 +34,16 @@ export class Call {
   @JoinColumn()
   ambulance: Ambulance;
 
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assignedDispatcherId' })
+  assignedDispatcher: User | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  assignedDispatcherId: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  dispatcherAssignedAt: Date | null;
+
   @Column({
     type: 'enum',
     enum: CallStatus,
