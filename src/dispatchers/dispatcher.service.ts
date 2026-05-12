@@ -242,6 +242,21 @@ export class DispatcherService implements OnModuleDestroy {
     }
   }
 
+  @OnEvent('dispatcher.refresh-requested')
+  async onRefreshRequested(): Promise<void> {
+    await this.driverGateway.refreshAvailableAmbulanceLocations();
+  }
+
+  @OnEvent('ambulance.locations.refreshed')
+  async onLocationsRefreshed(): Promise<void> {
+    const targets = this.dispatcherGateway.getOnlineDispatcherIds();
+    if (targets.length === 0) return;
+    const ambulances = await this.buildAmbulanceList();
+    this.dispatcherGateway.broadcastAmbulanceListUpdated(targets, {
+      ambulances,
+    });
+  }
+
   @OnEvent('ambulance.available')
   async onAmbulanceAvailable(): Promise<void> {
     const ambulances = await this.buildAmbulanceList();

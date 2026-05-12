@@ -117,6 +117,16 @@ export class DispatcherGateway
     });
   }
 
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('dispatcher.refresh-ambulances')
+  async onRefreshAmbulances(@ConnectedSocket() client: WsClient) {
+    const dispatcherId = this.socketDispatchers.get(client.id);
+    if (!dispatcherId) return;
+    await this.eventEmitter.emitAsync('dispatcher.refresh-requested', {
+      dispatcherId,
+    });
+  }
+
   notifyCallAssigned(
     dispatcherId: string,
     payload: {

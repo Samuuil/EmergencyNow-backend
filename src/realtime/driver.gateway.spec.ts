@@ -15,6 +15,7 @@ describe('DriverGateway', () => {
 
   const mockEventEmitter = {
     emitAsync: jest.fn().mockResolvedValue([]),
+    emit: jest.fn(),
   };
 
   const mockAmbulancesService = {
@@ -429,6 +430,115 @@ describe('DriverGateway', () => {
       await gateway.refreshAvailableAmbulanceLocations();
 
       expect(mockServer.emit).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'ambulance.locations.refreshed',
+        expect.objectContaining({ requestId: expect.any(Number) }),
+      );
+    });
+
+    it('should throttle back-to-back refresh calls within 2s window', async () => {
+      jest.useFakeTimers();
+      try {
+        const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
+        configService.get.mockReturnValue('test-secret');
+        jwtService.verify.mockReturnValue(mockPayload);
+
+        const client: DriverSocket = {
+          id: 'socket-123',
+          handshake: { headers: { authorization: 'Bearer valid-token' } },
+          disconnect: jest.fn(),
+        } as any;
+
+        gateway.handleConnection(client);
+
+        const driverMap = new Map([['driver-123', 'amb-123']]);
+        ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
+          driverMap,
+        );
+
+        await gateway.refreshAvailableAmbulanceLocations();
+        await gateway.refreshAvailableAmbulanceLocations();
+
+        const locationRequestCalls = mockServer.emit.mock.calls.filter(
+          ([event]) => event === 'location.request',
+        );
+        expect(locationRequestCalls).toHaveLength(1);
+
+        jest.clearAllTimers();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should close window and emit refreshed when all drivers respond', async () => {
+      const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
+      configService.get.mockReturnValue('test-secret');
+      jwtService.verify.mockReturnValue(mockPayload);
+
+      const client: DriverSocket = {
+        id: 'socket-123',
+        handshake: { headers: { authorization: 'Bearer valid-token' } },
+        disconnect: jest.fn(),
+      } as any;
+
+      gateway.handleConnection(client);
+
+      const driverMap = new Map([['driver-123', 'amb-123']]);
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
+      ambulancesService.updateLocation.mockResolvedValue({} as any);
+
+      await gateway.refreshAvailableAmbulanceLocations();
+
+      await gateway.onLocationResponse(client, {
+        requestId: 1,
+        latitude: 42.7,
+        longitude: 23.3,
+      });
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'ambulance.locations.refreshed',
+        expect.objectContaining({ requestId: 1 }),
+      );
+    });
+
+    it('should close window after hard timeout fires', async () => {
+      jest.useFakeTimers();
+      try {
+        const mockPayload = { sub: 'driver-123', role: 'DRIVER' };
+        configService.get.mockReturnValue('test-secret');
+        jwtService.verify.mockReturnValue(mockPayload);
+
+        const client: DriverSocket = {
+          id: 'socket-123',
+          handshake: { headers: { authorization: 'Bearer valid-token' } },
+          disconnect: jest.fn(),
+        } as any;
+
+        gateway.handleConnection(client);
+
+        const driverMap = new Map([
+          ['driver-123', 'amb-123'],
+          ['driver-456', 'amb-456'],
+        ]);
+        ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
+          driverMap,
+        );
+
+        await gateway.refreshAvailableAmbulanceLocations();
+        expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+          'ambulance.locations.refreshed',
+          expect.anything(),
+        );
+
+        jest.advanceTimersByTime(10000);
+
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+          'ambulance.locations.refreshed',
+          expect.objectContaining({ requestId: expect.any(Number) }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 

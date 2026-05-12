@@ -41,11 +41,18 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   >();
 
   private locationRequestId = 0;
+  private lastRefreshStartedAt = 0;
+  private static readonly MIN_REFRESH_INTERVAL_MS = 2000;
+  private static readonly REFRESH_DEBOUNCE_MS = 2000;
+  private static readonly REFRESH_HARD_TIMEOUT_MS = 10000;
   private pendingLocationRequests = new Map<
     number,
     {
       driverIdToAmbulanceId: Map<string, string>;
       respondedAmbulanceIds: Set<string>;
+      expectedCount: number;
+      debounceTimer?: NodeJS.Timeout;
+      hardTimeoutTimer?: NodeJS.Timeout;
     }
   >();
 
@@ -138,6 +145,16 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.longitude,
       );
     }
+
+    if (pending.respondedAmbulanceIds.size >= pending.expectedCount) {
+      this.closeLocationRefreshWindow(data.requestId);
+      return;
+    }
+
+    if (pending.debounceTimer) clearTimeout(pending.debounceTimer);
+    pending.debounceTimer = setTimeout(() => {
+      this.closeLocationRefreshWindow(data.requestId);
+    }, DriverGateway.REFRESH_DEBOUNCE_MS);
   }
 
   @UseGuards(WsJwtGuard)
@@ -269,6 +286,15 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async refreshAvailableAmbulanceLocations(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastRefreshStartedAt < DriverGateway.MIN_REFRESH_INTERVAL_MS) {
+      this.logger.log(
+        'Location refresh throttled; sharing an existing in-flight window',
+      );
+      return;
+    }
+    this.lastRefreshStartedAt = now;
+
     const driverIdToAmbulanceId =
       await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
@@ -276,25 +302,44 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       (dId: string) => this.driverSockets.has(dId),
     );
 
+    const requestId = ++this.locationRequestId;
+
     if (onlineDriverIds.length === 0) {
       this.logger.log(
         'No online drivers with available ambulances to request location from',
       );
+      this.eventEmitter.emit('ambulance.locations.refreshed', { requestId });
       return;
     }
 
-    const requestId = ++this.locationRequestId;
-    this.pendingLocationRequests.set(requestId, {
+    const entry: {
+      driverIdToAmbulanceId: Map<string, string>;
+      respondedAmbulanceIds: Set<string>;
+      expectedCount: number;
+      debounceTimer?: NodeJS.Timeout;
+      hardTimeoutTimer?: NodeJS.Timeout;
+    } = {
       driverIdToAmbulanceId,
       respondedAmbulanceIds: new Set(),
-    });
+      expectedCount: onlineDriverIds.length,
+    };
+    this.pendingLocationRequests.set(requestId, entry);
 
     for (const driverId of onlineDriverIds) {
       this.emitToDriver(driverId, 'location.request', { requestId });
     }
 
-    setTimeout(() => {
-      this.pendingLocationRequests.delete(requestId);
-    }, 10000);
+    entry.hardTimeoutTimer = setTimeout(() => {
+      this.closeLocationRefreshWindow(requestId);
+    }, DriverGateway.REFRESH_HARD_TIMEOUT_MS);
+  }
+
+  private closeLocationRefreshWindow(requestId: number): void {
+    const entry = this.pendingLocationRequests.get(requestId);
+    if (!entry) return;
+    if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
+    if (entry.hardTimeoutTimer) clearTimeout(entry.hardTimeoutTimer);
+    this.pendingLocationRequests.delete(requestId);
+    this.eventEmitter.emit('ambulance.locations.refreshed', { requestId });
   }
 }
