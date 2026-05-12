@@ -53,7 +53,8 @@ export class DispatcherService implements OnModuleDestroy {
   // ───────────────────────── Public API ─────────────────────────
 
   async routeCall(call: Call): Promise<void> {
-    const dispatcherId = this.pickDispatcher(call.id);
+    const callerUserId = call.user?.id ?? null;
+    const dispatcherId = this.pickDispatcher(call.id, callerUserId);
     if (!dispatcherId) {
       await this.notifyUserAwaitingDispatcher(call.id);
       this.logger.log(
@@ -276,8 +277,13 @@ export class DispatcherService implements OnModuleDestroy {
 
   // ───────────────────────── Internals ─────────────────────────
 
-  private pickDispatcher(callId: string): string | null {
-    const online = this.dispatcherGateway.getOnlineDispatcherIds();
+  private pickDispatcher(
+    callId: string,
+    callerUserId: string | null,
+  ): string | null {
+    const online = this.dispatcherGateway
+      .getOnlineDispatcherIds()
+      .filter((id) => id !== callerUserId);
     if (online.length === 0) return null;
 
     const seen = this.callSeenDispatchers.get(callId) ?? new Set<string>();
@@ -381,7 +387,10 @@ export class DispatcherService implements OnModuleDestroy {
       return;
     }
 
-    const call = await this.callsRepository.findOne({ where: { id: callId } });
+    const call = await this.callsRepository.findOne({
+      where: { id: callId },
+      relations: ['user'],
+    });
     if (!call || call.status !== CallStatus.PENDING) {
       // Call is no longer relevant.
       this.callSeenDispatchers.delete(callId);
@@ -402,7 +411,7 @@ export class DispatcherService implements OnModuleDestroy {
     this.callSeenDispatchers.set(callId, seen);
 
     // Try to find a different eligible dispatcher (not in seen).
-    const next = this.pickDispatcher(callId);
+    const next = this.pickDispatcher(callId, call.user?.id ?? null);
 
     if (!next || next === currentDispatcherId) {
       // No alternative — fall back to keeping current dispatcher.
@@ -441,13 +450,15 @@ export class DispatcherService implements OnModuleDestroy {
   private async drainQueueForDispatcher(dispatcherId: string): Promise<void> {
     if (!this.dispatcherGateway.isDispatcherOnline(dispatcherId)) return;
     while (this.loadOf(dispatcherId) < MAX_CALLS_PER_DISPATCHER) {
-      const next = await this.callsRepository.findOne({
-        where: {
-          status: CallStatus.PENDING,
-          assignedDispatcherId: IsNull(),
-        },
-        order: { createdAt: 'ASC' },
-      });
+      const next = await this.callsRepository
+        .createQueryBuilder('call')
+        .where('call.status = :status', { status: CallStatus.PENDING })
+        .andWhere('call.assignedDispatcherId IS NULL')
+        .andWhere('call.userId != :dispatcherId OR call.userId IS NULL', {
+          dispatcherId,
+        })
+        .orderBy('call.createdAt', 'ASC')
+        .getOne();
       if (!next) return;
       const claimed = await this.assignCallToDispatcher(next.id, dispatcherId);
       if (!claimed) {
