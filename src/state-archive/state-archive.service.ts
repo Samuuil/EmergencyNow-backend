@@ -181,6 +181,107 @@ export class StateArchiveService {
     }
   }
 
+  async findByPhoneNumber(phoneNumber: string): Promise<StateArchive | null> {
+    try {
+      let archive = await this.archiveRepo.findOne({ where: { phoneNumber } });
+
+      if (archive) {
+        return archive;
+      }
+
+      const stateArchiveUrl =
+        this.configService.get<string>('STATE_ARCHIVE_URL');
+      if (!stateArchiveUrl) {
+        this.logger.error('STATE_ARCHIVE_URL is not configured');
+        throw new InternalServerErrorException({
+          code: StateArchiveErrorCode.DATABASE_ERROR,
+          message: 'State archive URL is not configured',
+        });
+      }
+
+      try {
+        const url = `${stateArchiveUrl}/state-archive-mock/phone/${phoneNumber}`;
+        this.logger.log(
+          `Fetching state archive data from external API: ${url}`,
+        );
+
+        const response = await firstValueFrom(this.httpService.get(url));
+
+        const externalData = response.data as {
+          egn: string;
+          fullName: string;
+          email: string;
+          phoneNumber: string;
+        } | null;
+
+        if (!externalData) {
+          return null;
+        }
+
+        archive = this.archiveRepo.create({
+          egn: externalData.egn,
+          fullName: externalData.fullName,
+          email: externalData.email,
+          phoneNumber: externalData.phoneNumber,
+        });
+
+        try {
+          archive = await this.archiveRepo.save(archive);
+          this.logger.log(
+            `Saved state archive data for phone: ${phoneNumber}`,
+          );
+        } catch (saveError) {
+          if (
+            saveError instanceof QueryFailedError &&
+            (saveError as any).code === PG_UNIQUE_VIOLATION
+          ) {
+            this.logger.warn(
+              `Concurrent insert for phone ${phoneNumber}; re-fetching existing record`,
+            );
+            archive = await this.archiveRepo.findOne({ where: { phoneNumber } });
+            if (!archive) throw saveError;
+          } else {
+            throw saveError;
+          }
+        }
+
+        return archive;
+      } catch (httpError) {
+        const err = httpError as {
+          response?: { status: number };
+          message: string;
+          stack?: string;
+        };
+        if (err.response?.status === 404) {
+          this.logger.warn(
+            `State archive not found for phone: ${phoneNumber}`,
+          );
+          return null;
+        }
+        this.logger.error(
+          `Failed to fetch from external API: ${err.message}`,
+          err.stack,
+        );
+        throw new InternalServerErrorException({
+          code: StateArchiveErrorCode.DATABASE_ERROR,
+          message: 'Failed to fetch state archive data from external API',
+        });
+      }
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      this.logger.error(
+        `${StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR]}: ${error}`,
+      );
+      throw new InternalServerErrorException({
+        code: StateArchiveErrorCode.DATABASE_ERROR,
+        message:
+          StateArchiveErrorMessages[StateArchiveErrorCode.DATABASE_ERROR],
+      });
+    }
+  }
+
   async findByEgn(egn: string): Promise<StateArchive | null> {
     try {
       let archive = await this.archiveRepo.findOne({ where: { egn } });

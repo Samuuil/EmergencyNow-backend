@@ -12,6 +12,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { AuthModule } from '../auth/auth.module';
 import { ContactsModule } from '../contacts/contact.module';
 import { DispatchersModule } from '../dispatchers/dispatcher.module';
+import { StateArchiveModule } from '../state-archive/state-archive.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
@@ -24,6 +25,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
     RealtimeModule,
     AuthModule,
     ContactsModule,
+    StateArchiveModule,
     forwardRef(() => DispatchersModule),
   ],
   controllers: [CallsController],
