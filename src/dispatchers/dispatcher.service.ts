@@ -164,15 +164,7 @@ export class DispatcherService implements OnModuleDestroy {
       });
       throw new BadRequestException('Ambulance is no longer available');
     }
-    if (!this.driverGateway.isDriverOnline(ambulance.driverId)) {
-      const ambulances = await this.buildAmbulanceList();
-      this.dispatcherGateway.notifyAmbulanceUnavailable(dispatcherId, {
-        callId,
-        ambulanceId,
-        ambulances,
-      });
-      throw new BadRequestException('Driver is not online');
-    }
+    const driverOnline = this.driverGateway.isDriverOnline(ambulance.driverId);
 
     const route = await this.googleMapsService.getRoute(
       { latitude: ambulance.latitude, longitude: ambulance.longitude },
@@ -201,7 +193,7 @@ export class DispatcherService implements OnModuleDestroy {
     });
 
     this.logger.log(
-      `Dispatcher ${dispatcherId} offered call ${callId} to ambulance ${ambulanceId} (driver ${ambulance.driverId})`,
+      `Dispatcher ${dispatcherId} offered call ${callId} to ambulance ${ambulanceId} (driver ${ambulance.driverId}, socket=${driverOnline ? 'online' : 'offline, FCM-only'})`,
     );
   }
 
