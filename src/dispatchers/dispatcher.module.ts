@@ -9,6 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
     AmbulancesModule,
     forwardRef(() => RealtimeModule),
     AuthModule,
+    NotificationModule,
   ],
   controllers: [DispatcherController],
   providers: [DispatcherService, GoogleMapsService, JwtAuthGuard, RolesGuard],

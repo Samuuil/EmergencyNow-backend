@@ -469,8 +469,8 @@ export class CallsService {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
 
-    this.driverGateway.clearOffer(id);
     await this.dispatcherService.notifyCallCancelled(id);
+    this.driverGateway.clearOffer(id);
 
     await this.callsRepository.remove(call);
   }

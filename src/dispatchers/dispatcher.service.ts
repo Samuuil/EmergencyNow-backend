@@ -16,6 +16,7 @@ import { DispatcherGateway } from '../realtime/dispatcher.gateway';
 import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
 import { GoogleMapsService } from '../common/services/google-maps.service';
+import { NotificationService } from '../notification/notification.service';
 import { DispatcherCallOfferDto } from './dto/dispatcher-call-offer.dto';
 import { DispatcherAmbulanceSummaryDto } from './dto/dispatcher-ambulance-summary.dto';
 
@@ -43,6 +44,7 @@ export class DispatcherService implements OnModuleDestroy {
     private readonly driverGateway: DriverGateway,
     private readonly userGateway: UserGateway,
     private readonly googleMapsService: GoogleMapsService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   onModuleDestroy(): void {
@@ -76,6 +78,7 @@ export class DispatcherService implements OnModuleDestroy {
       });
     }
     this.callSeenDispatchers.delete(callId);
+    await this.cancelOfferedDriverFcm(callId);
     this.driverGateway.clearOffer(callId);
     await this.callsRepository.update(
       { id: callId },
@@ -92,6 +95,7 @@ export class DispatcherService implements OnModuleDestroy {
     }
     this.cancelTimer(callId);
     this.callSeenDispatchers.delete(callId);
+    await this.cancelOfferedDriverFcm(callId);
   }
 
   async onDriverAccepted(callId: string, ambulanceId: string): Promise<void> {
@@ -183,6 +187,15 @@ export class DispatcherService implements OnModuleDestroy {
       longitude: call.longitude,
       ambulanceId: ambulance.id,
       driverId: ambulance.driverId,
+      distance: route.distance,
+      duration: route.duration,
+    });
+
+    void this.notificationService.sendCallOffer(ambulance.driverId, {
+      callId: call.id,
+      description: call.description,
+      latitude: call.latitude,
+      longitude: call.longitude,
       distance: route.distance,
       duration: route.duration,
     });
@@ -435,6 +448,7 @@ export class DispatcherService implements OnModuleDestroy {
       { id: callId },
       { assignedDispatcherId: null, dispatcherAssignedAt: null },
     );
+    await this.cancelOfferedDriverFcm(callId);
     this.driverGateway.clearOffer(callId);
 
     const assigned = await this.assignCallToDispatcher(callId, next);
@@ -575,5 +589,26 @@ export class DispatcherService implements OnModuleDestroy {
 
   private removeCallFromDispatcher(dispatcherId: string, callId: string): void {
     this.dispatcherLoads.get(dispatcherId)?.delete(callId);
+  }
+
+  private async cancelOfferedDriverFcm(callId: string): Promise<void> {
+    const pendingAmbulanceId =
+      this.driverGateway.getPendingAmbulanceId(callId);
+    if (!pendingAmbulanceId) return;
+    try {
+      const ambulance =
+        await this.ambulancesService.findOne(pendingAmbulanceId);
+      if (ambulance?.driverId) {
+        await this.notificationService.sendCallCancelled(
+          ambulance.driverId,
+          callId,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `cancelOfferedDriverFcm: failed to notify driver for call ${callId}`,
+        error,
+      );
+    }
   }
 }
