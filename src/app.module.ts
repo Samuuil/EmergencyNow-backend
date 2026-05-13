@@ -18,6 +18,8 @@ import { HospitalsModule } from './hospitals/hospitals.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SeedingModule } from './seeding/seeding.module';
 import { DispatchersModule } from './dispatchers/dispatcher.module';
+import { PushTokensModule } from './push-tokens/push-tokens.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { DispatchersModule } from './dispatchers/dispatcher.module';
     RealtimeModule,
     SeedingModule,
     DispatchersModule,
+    PushTokensModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

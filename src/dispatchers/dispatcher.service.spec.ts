@@ -7,6 +7,7 @@ import { DispatcherGateway } from '../realtime/dispatcher.gateway';
 import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
 import { GoogleMapsService } from '../common/services/google-maps.service';
+import { NotificationService } from '../notification/notification.service';
 
 describe('DispatcherService', () => {
   let service: DispatcherService;
@@ -38,6 +39,13 @@ describe('DispatcherService', () => {
         { provide: DriverGateway, useValue: mockDriverGateway },
         { provide: UserGateway, useValue: {} },
         { provide: GoogleMapsService, useValue: {} },
+        {
+          provide: NotificationService,
+          useValue: {
+            sendCallOffer: jest.fn().mockResolvedValue(undefined),
+            sendCallCancelled: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
