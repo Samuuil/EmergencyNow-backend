@@ -28,6 +28,7 @@ import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 import { DispatcherService } from '../dispatchers/dispatcher.service';
+import { StateArchiveService } from '../state-archive/state-archive.service';
 import {
   CallErrorCode,
   CallErrorMessages,
@@ -71,6 +72,7 @@ export class CallsService {
     private readonly contactsService: ContactsService,
     @Inject(forwardRef(() => DispatcherService))
     private readonly dispatcherService: DispatcherService,
+    private readonly stateArchiveService: StateArchiveService,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -91,12 +93,33 @@ export class CallsService {
         activeCallId: activeCall.id,
       });
     }
+    let patientEgn: string | null = fullUser.stateArchive?.egn ?? null;
+    let patientPhoneNumber: string | null = null;
+
+    if (dto.patientPhoneNumber) {
+      patientPhoneNumber = dto.patientPhoneNumber;
+      try {
+        const patientArchive = await this.stateArchiveService.findByPhoneNumber(
+          dto.patientPhoneNumber,
+        );
+        patientEgn = patientArchive?.egn ?? null;
+      } catch (error) {
+        this.logger.error(
+          `Failed to resolve patient EGN for phone ${dto.patientPhoneNumber}; proceeding without EGN`,
+          error,
+        );
+        patientEgn = null;
+      }
+    }
+
     const call = this.callsRepository.create({
       description: dto.description,
       latitude: dto.latitude,
       longitude: dto.longitude,
       user: fullUser,
       userEgn: fullUser.stateArchive?.egn ?? null,
+      patientEgn,
+      patientPhoneNumber,
       status: CallStatus.PENDING,
     });
 

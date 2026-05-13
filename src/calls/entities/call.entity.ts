@@ -30,6 +30,12 @@ export class Call {
   @Column()
   userEgn: string;
 
+  @Column({ nullable: true })
+  patientEgn: string | null;
+
+  @Column({ nullable: true })
+  patientPhoneNumber: string | null;
+
   @ManyToOne(() => Ambulance, { nullable: true })
   @JoinColumn()
   ambulance: Ambulance;
