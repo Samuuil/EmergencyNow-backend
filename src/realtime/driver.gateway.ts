@@ -32,13 +32,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private driverSockets = new Map<string, string>();
   private socketDrivers = new Map<string, string>();
 
-  // Rejections expire after this many ms so the same driver can be re-offered
-  // when no other ambulances are available.
-  private static readonly REJECTION_EXPIRY_MS = 30 * 1000;
-  private callOffers = new Map<
-    string,
-    { ambulanceId: string; rejectedAmbulances: Map<string, number> }
-  >();
+  private callOffers = new Map<string, { ambulanceId: string }>();
 
   private locationRequestId = 0;
   private lastRefreshStartedAt = 0;
@@ -193,12 +187,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     duration: number;
   }) {
     const { driverId, callId, ambulanceId } = params;
-    const existing = this.callOffers.get(callId);
-    const rejected = existing?.rejectedAmbulances ?? new Map<string, number>();
-    this.callOffers.set(callId, {
-      ambulanceId,
-      rejectedAmbulances: rejected,
-    });
+    this.callOffers.set(callId, { ambulanceId });
 
     this.emitToDriver(driverId, 'call.offer', {
       callId: params.callId,
@@ -210,15 +199,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  addRejection(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? {
-      ambulanceId: '',
-      rejectedAmbulances: new Map<string, number>(),
-    };
-    entry.rejectedAmbulances.set(ambulanceId, Date.now());
-    this.callOffers.set(callId, entry);
-  }
-
   clearOffer(callId: string) {
     this.callOffers.delete(callId);
   }
@@ -227,26 +207,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return this.callOffers.get(callId)?.ambulanceId ?? null;
   }
 
-  getRejectedAmbulanceIds(callId: string): string[] {
-    const entry = this.callOffers.get(callId);
-    if (!entry) return [];
-    const cutoff = Date.now() - DriverGateway.REJECTION_EXPIRY_MS;
-    const active: string[] = [];
-    for (const [ambId, ts] of entry.rejectedAmbulances) {
-      if (ts >= cutoff) {
-        active.push(ambId);
-      } else {
-        entry.rejectedAmbulances.delete(ambId);
-      }
-    }
-    return active;
-  }
-
   setPendingAmbulance(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? {
-      ambulanceId: '',
-      rejectedAmbulances: new Map<string, number>(),
-    };
+    const entry = this.callOffers.get(callId) ?? { ambulanceId: '' };
     entry.ambulanceId = ambulanceId;
     this.callOffers.set(callId, entry);
   }

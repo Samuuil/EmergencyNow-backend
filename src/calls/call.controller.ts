@@ -89,13 +89,6 @@ export class CallsController {
     return this.callsService.findOne(id);
   }
 
-  @Get(':id/tracking')
-  @Roles(Role.ADMIN, Role.DRIVER, Role.DISPATCHER)
-  @ApiOperation({ summary: 'Get tracking data for call' })
-  getTrackingData(@Param('id') id: string) {
-    return this.callsService.getTrackingData(id);
-  }
-
   @Post(':id/hospitals')
   @Roles(Role.ADMIN, Role.DRIVER)
   @ApiOperation({ summary: 'Get nearby hospitals for call' })
@@ -130,20 +123,6 @@ export class CallsController {
   @ApiOperation({ summary: 'Get route to selected hospital' })
   getHospitalRoute(@Param('id') id: string) {
     return this.callsService.getHospitalRouteData(id);
-  }
-
-  @Patch(':id/location')
-  @Roles(Role.ADMIN, Role.DRIVER)
-  @ApiOperation({ summary: 'Update ambulance location for call' })
-  updateAmbulanceLocation(
-    @Param('id') id: string,
-    @Body() body: LocationBodyDto,
-  ): Promise<Call> {
-    return this.callsService.updateAmbulanceLocation(
-      id,
-      body.latitude,
-      body.longitude,
-    );
   }
 
   @Patch(':id/status')

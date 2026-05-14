@@ -102,24 +102,6 @@ export class AmbulancesController {
     return this.ambulancesService.assignDriver(id, dto.driverId);
   }
 
-  @Delete(':id/driver')
-  @ApiOperation({ summary: 'Remove driver from ambulance' })
-  removeDriver(@Param('id') id: string): Promise<Ambulance> {
-    return this.ambulancesService.removeDriver(id);
-  }
-
-  @Patch(':id/available')
-  @ApiOperation({ summary: 'Mark ambulance as available' })
-  markAsAvailable(@Param('id') id: string): Promise<Ambulance> {
-    return this.ambulancesService.markAsAvailable(id);
-  }
-
-  @Patch(':id/dispatched')
-  @ApiOperation({ summary: 'Mark ambulance as dispatched' })
-  markAsDispatched(@Param('id') id: string): Promise<Ambulance> {
-    return this.ambulancesService.markAsDispatched(id);
-  }
-
   @Delete(':id')
   @ApiOperation({ summary: 'Delete ambulance' })
   async remove(@Param('id') id: string): Promise<{ message: string }> {
