@@ -174,31 +174,6 @@ export class CallsService {
     }
   }
 
-  async dispatchToAmbulanceManually(
-    callId: string,
-    ambulanceId: string,
-  ): Promise<Call> {
-    const call = await this.findOne(callId);
-    if (
-      call.status === CallStatus.COMPLETED ||
-      call.status === CallStatus.CANCELLED
-    ) {
-      throw new BadRequestException('Call is already completed or cancelled');
-    }
-    // Admin override: route directly to a specific ambulance, bypassing dispatcher.
-    if (!call.assignedDispatcherId) {
-      throw new BadRequestException(
-        'Call must be assigned to a dispatcher first (admin override path only)',
-      );
-    }
-    await this.dispatcherService.handleAssignAmbulanceRequest(
-      call.assignedDispatcherId,
-      callId,
-      ambulanceId,
-    );
-    return call;
-  }
-
   async handleDriverResponse(
     callId: string,
     driverId: string,
@@ -215,7 +190,6 @@ export class CallsService {
     }
 
     if (!accept) {
-      this.driverGateway.addRejection(callId, ambulance.id);
       this.driverGateway.clearOffer(callId);
       await this.dispatcherService.onDriverRejected(callId, ambulance.id);
       return;
