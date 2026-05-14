@@ -1,98 +1,150 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# EmergencyNow Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+EmergencyNow is a real-time emergency-response platform that coordinates patients, dispatchers, ambulance drivers and hospitals through structured data exchange instead of voice calls. The backend ingests a caller's GPS coordinates, routes the incident to a human dispatcher who picks the right ambulance, streams live route and arrival data to all parties, and exposes the patient's digital medical profile to the responding team. It also fans out automated alerts to the patient's pre-registered emergency contacts so they know an ambulance has been dispatched.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The service is a NestJS / TypeORM / PostgreSQL application with a Redis cache, WebSocket gateways for real-time updates, Google Maps for routing, and Firebase Cloud Messaging for push notifications to drivers whose app is closed.
 
-## Description
+## Api Documentation
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+https://emergencynow.samuil.me/api/docs
 
-## Project setup
+## Prerequisites
 
-```bash
-$ npm install
+- Node.js 20+
+- npm
+- Docker + Docker Compose (for the local Postgres and Redis instances)
+- A Google Maps Platform API key with the **Routes** and **Places** APIs enabled
+- A Firebase project (the same one the Android app uses) with a generated service-account JSON
+- A Twilio account (for SMS to emergency contacts) and SMTP credentials (for email)
+
+## Setup
+
+1. **Clone and install:**
+
+   ```
+   git clone https://github.com/Samuuil/EmergencyNow-backend.git
+   cd EmergencyNow-backend
+   npm install
+   ```
+
+2. **Create a `.env` file** at the project root (see the full list below).
+
+3. **Start Postgres and Redis** via Docker Compose:
+
+   ```
+   docker compose up -d
+   ```
+
+4. **Run migrations** to create the database schema:
+
+   ```
+   npm run migration:run
+   ```
+
+5. **Seed baseline data** (admin/dispatcher/driver users, hospitals, sample ambulances):
+
+   ```
+   npm run seed
+   ```
+
+6. **Start the server in watch mode:**
+   ```
+   npm run start:dev
+   ```
+
+The API listens on `http://localhost:3000` by default.
+
+## Environment variables
+
+Put these in a `.env` file at the repo root.
+
+### Database
+
+```
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USER=db_user
+DATABASE_PASSWORD=db_password
+DATABASE_NAME=emergencynow
 ```
 
-## Compile and run the project
+### Redis
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```
+REDIS_URL=redis://127.0.0.1:6381
 ```
 
-## Run tests
+### Server
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```
+PORT=3000
+NODE_ENV=development
+BASE_URL=http://localhost:3000
 ```
 
-## Deployment
+### Auth (JWT)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+JWT_SECRET=<long random string>
+JWT_REFRESH_SECRET=<a different long random string>
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Google Maps
 
-## Resources
+```
+GOOGLE_MAPS_API_KEY=<your Google Maps Platform key>
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### Firebase Cloud Messaging
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Generate a service-account key from **Firebase Console → Project settings → Service accounts → Generate new private key**, then copy three fields from the downloaded JSON:
 
-## Support
+```
+FIREBASE_PROJECT_ID=<from JSON: project_id>
+FIREBASE_CLIENT_EMAIL=<from JSON: client_email>
+FIREBASE_PRIVATE_KEY="<from JSON: private_key, keep the literal \n escapes, wrap in double quotes>"
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+If these three are missing the server still runs but push notifications are disabled (logged on startup).
 
-## Stay in touch
+### Twilio (SMS to emergency contacts)
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```
+ACCOUNT_SID=<Twilio Account SID>
+AUTH_TOKEN=<Twilio Auth Token>
+TWILIO_PHONE_NUMBER=<your Twilio sending number, E.164 format>
+```
 
-## License
+### Mail (SMTP — for emails to emergency contacts and verification codes)
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_USER=<smtp user>
+MAIL_PASSWORD=<smtp password>
+MAIL_FROM="EmergencyNow <no-reply@example.com>"
+```
+
+### External integrations
+
+```
+STATE_ARCHIVE_URL=<URL of the state archive service used to resolve EGN data>
+```
+
+### Seeding (optional)
+
+```
+SEED_USER=<email of the admin user the seed script creates>
+```
+
+## Useful scripts
+
+| Command                   | What it does                      |
+| ------------------------- | --------------------------------- |
+| `npm run start:dev`       | Start the API in watch mode       |
+| `npm run build`           | Compile to `dist/`                |
+| `npm run start:prod`      | Run the compiled build            |
+| `npm run migration:run`   | Apply pending migrations          |
+| `npm run migration:revert`| Revert the last applied migration |
+| `npm run seed`            | Seed the database                 |
