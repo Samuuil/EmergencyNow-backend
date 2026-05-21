@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Call } from '../calls/entities/call.entity';
@@ -23,13 +24,15 @@ import { RedisService } from '../common/redis/redis.service';
 import { DispatcherCallOfferDto } from './dto/dispatcher-call-offer.dto';
 import { DispatcherAmbulanceSummaryDto } from './dto/dispatcher-ambulance-summary.dto';
 
-export const MAX_CALLS_PER_DISPATCHER = 5;
-export const DISPATCHER_TIMEOUT_MS = 5 * 60 * 1000;
-
 @Injectable()
 export class DispatcherService implements OnModuleDestroy {
   private readonly logger = new Logger(DispatcherService.name);
 
+  private readonly maxCallsPerDispatcher: number;
+  private readonly dispatcherTimeoutMs: number;
+
+  // callId -> reassignment timer. Stays in-process: a setTimeout handle
+  // cannot live in Redis. Dispatcher load and seen-tracking are in Redis.
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -44,7 +47,17 @@ export class DispatcherService implements OnModuleDestroy {
     private readonly googleMapsService: GoogleMapsService,
     private readonly notificationService: NotificationService,
     private readonly redisService: RedisService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.maxCallsPerDispatcher = parseInt(
+      this.configService.get<string>('DISPATCHER_MAX_CALLS', '5'),
+      10,
+    );
+    this.dispatcherTimeoutMs = parseInt(
+      this.configService.get<string>('DISPATCHER_TIMEOUT_MS', '300000'),
+      10,
+    );
+  }
 
   onModuleDestroy(): void {
     for (const timer of this.callTimers.values()) clearTimeout(timer);
@@ -299,7 +312,7 @@ export class DispatcherService implements OnModuleDestroy {
     const loadOf = (id: string): number => loadByDispatcher.get(id) ?? 0;
 
     const eligibleWithCapacity = online.filter(
-      (id) => loadOf(id) < MAX_CALLS_PER_DISPATCHER,
+      (id) => loadOf(id) < this.maxCallsPerDispatcher,
     );
 
     if (eligibleWithCapacity.length === 0) return null;
@@ -376,7 +389,7 @@ export class DispatcherService implements OnModuleDestroy {
       this.handleTimeout(callId).catch((e) =>
         this.logger.error(`Timeout handler failed for call ${callId}`, e),
       );
-    }, DISPATCHER_TIMEOUT_MS);
+    }, this.dispatcherTimeoutMs);
     this.callTimers.set(callId, timer);
   }
 
@@ -456,7 +469,7 @@ export class DispatcherService implements OnModuleDestroy {
 
   private async drainQueueForDispatcher(dispatcherId: string): Promise<void> {
     if (!this.dispatcherGateway.isDispatcherOnline(dispatcherId)) return;
-    while ((await this.loadOf(dispatcherId)) < MAX_CALLS_PER_DISPATCHER) {
+    while ((await this.loadOf(dispatcherId)) < this.maxCallsPerDispatcher) {
       const next = await this.callsRepository
         .createQueryBuilder('call')
         .where('call.status = :status', { status: CallStatus.PENDING })

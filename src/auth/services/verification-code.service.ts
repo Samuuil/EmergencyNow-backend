@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../common/redis/redis.service';
 
 export interface VerificationCodeData {
@@ -9,10 +10,18 @@ export interface VerificationCodeData {
 
 @Injectable()
 export class VerificationCodeService {
-  private readonly CODE_TTL_SECONDS = 600;
+  private readonly CODE_TTL_SECONDS: number;
   private readonly KEY_PREFIX = 'verify';
 
-  constructor(private redisService: RedisService) {}
+  constructor(
+    private redisService: RedisService,
+    private configService: ConfigService,
+  ) {
+    this.CODE_TTL_SECONDS = parseInt(
+      this.configService.get<string>('VERIFICATION_CODE_TTL_SECONDS', '600'),
+      10,
+    );
+  }
 
   private normalizeEgn(egn: string): string {
     return (egn ?? '').trim();

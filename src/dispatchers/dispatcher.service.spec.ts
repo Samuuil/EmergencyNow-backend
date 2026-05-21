@@ -10,6 +10,7 @@ import { UserGateway } from '../realtime/user.gateway';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { NotificationService } from '../notification/notification.service';
 import { RedisService } from '../common/redis/redis.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('DispatcherService', () => {
   let service: DispatcherService;
@@ -63,6 +64,10 @@ describe('DispatcherService', () => {
           },
         },
         { provide: RedisService, useValue: mockRedisService },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((_key: string, def?: unknown) => def) },
+        },
       ],
     }).compile();
 

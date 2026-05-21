@@ -6,8 +6,14 @@ import Redis from 'ioredis';
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis;
+  private readonly refreshTtlSeconds: number;
 
   constructor(private configService: ConfigService) {
+    this.refreshTtlSeconds = parseInt(
+      this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS', '2592000'),
+      10,
+    );
+
     const redisUrl = this.configService.get<string>(
       'REDIS_URL',
       'redis://localhost:6379',
@@ -58,14 +64,12 @@ export class RedisService implements OnModuleDestroy {
     return await this.client.ttl(key);
   }
 
-  private static readonly REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
-
   async storeRefreshJti(userId: string, jti: string): Promise<void> {
     await Promise.all([
-      this.client.setex(`refresh:jti:${jti}`, RedisService.REFRESH_TTL, userId),
+      this.client.setex(`refresh:jti:${jti}`, this.refreshTtlSeconds, userId),
       this.client.setex(
         `refresh:user:${userId}`,
-        RedisService.REFRESH_TTL,
+        this.refreshTtlSeconds,
         jti,
       ),
     ]);
@@ -92,12 +96,12 @@ export class RedisService implements OnModuleDestroy {
       this.client.del(`refresh:jti:${oldJti}`),
       this.client.setex(
         `refresh:jti:${newJti}`,
-        RedisService.REFRESH_TTL,
+        this.refreshTtlSeconds,
         userId,
       ),
       this.client.setex(
         `refresh:user:${userId}`,
-        RedisService.REFRESH_TTL,
+        this.refreshTtlSeconds,
         newJti,
       ),
     ]);
