@@ -282,6 +282,74 @@ export class StateArchiveService {
     }
   }
 
+  async refreshByEgn(egn: string): Promise<StateArchive | null> {
+    const stateArchiveUrl = this.configService.get<string>('STATE_ARCHIVE_URL');
+
+    if (!stateArchiveUrl) {
+      this.logger.warn(
+        'STATE_ARCHIVE_URL not configured; falling back to local record',
+      );
+      return this.archiveRepo.findOne({ where: { egn } });
+    }
+
+    try {
+      const url = `${stateArchiveUrl}/state-archive-mock/egn/${egn}`;
+      this.logger.log(`Refreshing state archive from external API: ${url}`);
+
+      const response = await firstValueFrom(this.httpService.get(url));
+      const externalData = response.data as {
+        egn: string;
+        fullName: string;
+        email: string;
+        phoneNumber: string;
+      } | null;
+
+      if (!externalData) {
+        return null;
+      }
+
+      const existing = await this.archiveRepo.findOne({ where: { egn } });
+
+      if (!existing) {
+        const archive = this.archiveRepo.create(externalData);
+        return this.archiveRepo.save(archive);
+      }
+
+      const changed =
+        existing.fullName !== externalData.fullName ||
+        existing.email !== externalData.email ||
+        existing.phoneNumber !== externalData.phoneNumber;
+
+      if (changed) {
+        this.logger.log(
+          `State archive data changed for EGN ${egn}; updating local record`,
+        );
+        existing.fullName = externalData.fullName;
+        existing.email = externalData.email;
+        existing.phoneNumber = externalData.phoneNumber;
+        return this.archiveRepo.save(existing);
+      }
+
+      return existing;
+    } catch (httpError) {
+      const err = httpError as {
+        response?: { status: number };
+        message: string;
+        stack?: string;
+      };
+
+      if (err.response?.status === 404) {
+        this.logger.warn(`State archive not found for EGN: ${egn}`);
+        return null;
+      }
+
+      this.logger.warn(
+        `External API unavailable for EGN ${egn}; falling back to local record: ${err.message}`,
+      );
+      return this.archiveRepo.findOne({ where: { egn } });
+    }
+  }
+
   async findByEgn(egn: string): Promise<StateArchive | null> {
     try {
       let archive = await this.archiveRepo.findOne({ where: { egn } });
