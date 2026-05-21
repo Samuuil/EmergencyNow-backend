@@ -32,8 +32,7 @@ export class DispatcherGateway
 
   private readonly logger = new Logger(DispatcherGateway.name);
 
-  private dispatcherSockets = new Map<string, string>();
-  private socketDispatchers = new Map<string, string>();
+  private readonly onlineDispatchers = new Set<string>();
 
   constructor(
     private readonly jwt: JwtService,
@@ -67,8 +66,8 @@ export class DispatcherGateway
 
       client.user = { id: payload.sub, role: payload.role };
 
-      this.dispatcherSockets.set(payload.sub, client.id);
-      this.socketDispatchers.set(client.id, payload.sub);
+      client.join(payload.sub);
+      this.onlineDispatchers.add(payload.sub);
       this.logger.log(
         `Dispatcher ${payload.sub} connected via WS (socket ${client.id})`,
       );
@@ -86,10 +85,9 @@ export class DispatcherGateway
   }
 
   handleDisconnect(client: WsClient) {
-    const dispatcherId = this.socketDispatchers.get(client.id);
+    const dispatcherId = client.user?.id;
     if (dispatcherId) {
-      this.dispatcherSockets.delete(dispatcherId);
-      this.socketDispatchers.delete(client.id);
+      this.onlineDispatchers.delete(dispatcherId);
       this.logger.log(
         `Dispatcher ${dispatcherId} disconnected (socket ${client.id})`,
       );
@@ -107,7 +105,7 @@ export class DispatcherGateway
     @ConnectedSocket() client: WsClient,
     @MessageBody() data: { callId: string; ambulanceId: string },
   ) {
-    const dispatcherId = this.socketDispatchers.get(client.id);
+    const dispatcherId = client.user?.id;
     if (!dispatcherId) return;
     if (!data?.callId || !data?.ambulanceId) return;
     await this.eventEmitter.emitAsync('dispatcher.assign-ambulance', {
@@ -120,7 +118,7 @@ export class DispatcherGateway
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('dispatcher.refresh-ambulances')
   async onRefreshAmbulances(@ConnectedSocket() client: WsClient) {
-    const dispatcherId = this.socketDispatchers.get(client.id);
+    const dispatcherId = client.user?.id;
     if (!dispatcherId) return;
     await this.eventEmitter.emitAsync('dispatcher.refresh-requested', {
       dispatcherId,
@@ -190,11 +188,11 @@ export class DispatcherGateway
   }
 
   isDispatcherOnline(dispatcherId: string): boolean {
-    return this.dispatcherSockets.has(dispatcherId);
+    return this.onlineDispatchers.has(dispatcherId);
   }
 
   getOnlineDispatcherIds(): string[] {
-    return Array.from(this.dispatcherSockets.keys());
+    return Array.from(this.onlineDispatchers);
   }
 
   private emitToDispatcher(
@@ -202,14 +200,7 @@ export class DispatcherGateway
     event: string,
     data: unknown,
   ): void {
-    const socketId = this.dispatcherSockets.get(dispatcherId);
-    if (!socketId) {
-      this.logger.warn(
-        `Dispatcher ${dispatcherId} not connected; cannot emit ${event}`,
-      );
-      return;
-    }
-    this.server.to(socketId).emit(event, data);
+    this.server.to(dispatcherId).emit(event, data);
   }
 
   private extractToken(client: WsClient): string | null {
