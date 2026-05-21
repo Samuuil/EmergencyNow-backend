@@ -63,7 +63,11 @@ export class RedisService implements OnModuleDestroy {
   async storeRefreshJti(userId: string, jti: string): Promise<void> {
     await Promise.all([
       this.client.setex(`refresh:jti:${jti}`, RedisService.REFRESH_TTL, userId),
-      this.client.setex(`refresh:user:${userId}`, RedisService.REFRESH_TTL, jti),
+      this.client.setex(
+        `refresh:user:${userId}`,
+        RedisService.REFRESH_TTL,
+        jti,
+      ),
     ]);
   }
 
@@ -79,11 +83,103 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  async rotateRefreshJti(oldJti: string, userId: string, newJti: string): Promise<void> {
+  async rotateRefreshJti(
+    oldJti: string,
+    userId: string,
+    newJti: string,
+  ): Promise<void> {
     await Promise.all([
       this.client.del(`refresh:jti:${oldJti}`),
-      this.client.setex(`refresh:jti:${newJti}`, RedisService.REFRESH_TTL, userId),
-      this.client.setex(`refresh:user:${userId}`, RedisService.REFRESH_TTL, newJti),
+      this.client.setex(
+        `refresh:jti:${newJti}`,
+        RedisService.REFRESH_TTL,
+        userId,
+      ),
+      this.client.setex(
+        `refresh:user:${userId}`,
+        RedisService.REFRESH_TTL,
+        newJti,
+      ),
     ]);
+  }
+
+  private static dispatcherLoadKey(dispatcherId: string): string {
+    return `dispatcher:load:${dispatcherId}`;
+  }
+
+  private static callHolderKey(callId: string): string {
+    return `call:holder:${callId}`;
+  }
+
+  private static callSeenKey(callId: string): string {
+    return `call:seen:${callId}`;
+  }
+
+  async addDispatcherCall(dispatcherId: string, callId: string): Promise<void> {
+    await Promise.all([
+      this.client.sadd(RedisService.dispatcherLoadKey(dispatcherId), callId),
+      this.client.set(RedisService.callHolderKey(callId), dispatcherId),
+    ]);
+  }
+
+  async removeDispatcherCall(
+    dispatcherId: string,
+    callId: string,
+  ): Promise<void> {
+    await Promise.all([
+      this.client.srem(RedisService.dispatcherLoadKey(dispatcherId), callId),
+      this.client.del(RedisService.callHolderKey(callId)),
+    ]);
+  }
+
+  async getDispatcherLoad(dispatcherId: string): Promise<number> {
+    return this.client.scard(RedisService.dispatcherLoadKey(dispatcherId));
+  }
+
+  async dispatcherHoldsCall(
+    dispatcherId: string,
+    callId: string,
+  ): Promise<boolean> {
+    const result = await this.client.sismember(
+      RedisService.dispatcherLoadKey(dispatcherId),
+      callId,
+    );
+    return result === 1;
+  }
+
+  async getCallHolder(callId: string): Promise<string | null> {
+    return this.client.get(RedisService.callHolderKey(callId));
+  }
+
+  async clearDispatcherCalls(dispatcherId: string): Promise<string[]> {
+    const callIds = await this.client.smembers(
+      RedisService.dispatcherLoadKey(dispatcherId),
+    );
+    const pipeline = this.client.pipeline();
+    pipeline.del(RedisService.dispatcherLoadKey(dispatcherId));
+    for (const callId of callIds) {
+      pipeline.del(RedisService.callHolderKey(callId));
+    }
+    await pipeline.exec();
+    return callIds;
+  }
+
+  async addSeenDispatcher(callId: string, dispatcherId: string): Promise<void> {
+    await this.client.sadd(RedisService.callSeenKey(callId), dispatcherId);
+  }
+
+  async getSeenDispatchers(callId: string): Promise<string[]> {
+    return this.client.smembers(RedisService.callSeenKey(callId));
+  }
+
+  async removeSeenDispatcher(
+    callId: string,
+    dispatcherId: string,
+  ): Promise<void> {
+    await this.client.srem(RedisService.callSeenKey(callId), dispatcherId);
+  }
+
+  async clearSeenDispatchers(callId: string): Promise<void> {
+    await this.client.del(RedisService.callSeenKey(callId));
   }
 }

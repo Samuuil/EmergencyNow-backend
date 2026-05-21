@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DispatcherService } from './dispatcher.service';
 import { Call } from '../calls/entities/call.entity';
+import { StateArchive } from '../state-archive/entities/state-archive.entity';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { DispatcherGateway } from '../realtime/dispatcher.gateway';
 import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { NotificationService } from '../notification/notification.service';
+import { RedisService } from '../common/redis/redis.service';
 
 describe('DispatcherService', () => {
   let service: DispatcherService;
@@ -30,10 +32,24 @@ describe('DispatcherService', () => {
       findAvailableList: jest.fn().mockResolvedValue([]),
     };
 
+    const mockRedisService = {
+      addDispatcherCall: jest.fn().mockResolvedValue(undefined),
+      removeDispatcherCall: jest.fn().mockResolvedValue(undefined),
+      getDispatcherLoad: jest.fn().mockResolvedValue(0),
+      dispatcherHoldsCall: jest.fn().mockResolvedValue(false),
+      getCallHolder: jest.fn().mockResolvedValue(null),
+      clearDispatcherCalls: jest.fn().mockResolvedValue([]),
+      addSeenDispatcher: jest.fn().mockResolvedValue(undefined),
+      getSeenDispatchers: jest.fn().mockResolvedValue([]),
+      removeSeenDispatcher: jest.fn().mockResolvedValue(undefined),
+      clearSeenDispatchers: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DispatcherService,
         { provide: getRepositoryToken(Call), useValue: {} },
+        { provide: getRepositoryToken(StateArchive), useValue: {} },
         { provide: AmbulancesService, useValue: mockAmbulancesService },
         { provide: DispatcherGateway, useValue: mockDispatcherGateway },
         { provide: DriverGateway, useValue: mockDriverGateway },
@@ -46,6 +62,7 @@ describe('DispatcherService', () => {
             sendCallCancelled: jest.fn().mockResolvedValue(undefined),
           },
         },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 

@@ -19,6 +19,7 @@ import { DriverGateway } from '../realtime/driver.gateway';
 import { UserGateway } from '../realtime/user.gateway';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { NotificationService } from '../notification/notification.service';
+import { RedisService } from '../common/redis/redis.service';
 import { DispatcherCallOfferDto } from './dto/dispatcher-call-offer.dto';
 import { DispatcherAmbulanceSummaryDto } from './dto/dispatcher-ambulance-summary.dto';
 
@@ -29,13 +30,6 @@ export const DISPATCHER_TIMEOUT_MS = 5 * 60 * 1000;
 export class DispatcherService implements OnModuleDestroy {
   private readonly logger = new Logger(DispatcherService.name);
 
-  // dispatcherId -> Set<callId> they currently hold
-  private readonly dispatcherLoads = new Map<string, Set<string>>();
-
-  // callId -> Set<dispatcherId> that have already been tried for this call
-  private readonly callSeenDispatchers = new Map<string, Set<string>>();
-
-  // callId -> 5-min reassignment timer
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -49,6 +43,7 @@ export class DispatcherService implements OnModuleDestroy {
     private readonly userGateway: UserGateway,
     private readonly googleMapsService: GoogleMapsService,
     private readonly notificationService: NotificationService,
+    private readonly redisService: RedisService,
   ) {}
 
   onModuleDestroy(): void {
@@ -60,7 +55,7 @@ export class DispatcherService implements OnModuleDestroy {
 
   async routeCall(call: Call): Promise<void> {
     const callerUserId = call.user?.id ?? null;
-    const dispatcherId = this.pickDispatcher(call.id, callerUserId);
+    const dispatcherId = await this.pickDispatcher(call.id, callerUserId);
     if (!dispatcherId) {
       await this.notifyUserAwaitingDispatcher(call.id);
       this.logger.log(
@@ -73,15 +68,15 @@ export class DispatcherService implements OnModuleDestroy {
 
   async releaseCall(callId: string, reason: string): Promise<void> {
     this.cancelTimer(callId);
-    const dispatcherId = this.findHoldingDispatcher(callId);
+    const dispatcherId = await this.findHoldingDispatcher(callId);
     if (dispatcherId) {
-      this.removeCallFromDispatcher(dispatcherId, callId);
+      await this.removeCallFromDispatcher(dispatcherId, callId);
       this.dispatcherGateway.notifyCallReleased(dispatcherId, {
         callId,
         reason,
       });
     }
-    this.callSeenDispatchers.delete(callId);
+    await this.redisService.clearSeenDispatchers(callId);
     await this.cancelOfferedDriverFcm(callId);
     this.driverGateway.clearOffer(callId);
     await this.callsRepository.update(
@@ -91,33 +86,33 @@ export class DispatcherService implements OnModuleDestroy {
   }
 
   async notifyCallCancelled(callId: string): Promise<void> {
-    const dispatcherId = this.findHoldingDispatcher(callId);
+    const dispatcherId = await this.findHoldingDispatcher(callId);
     if (dispatcherId) {
       this.dispatcherGateway.notifyCallCancelled(dispatcherId, { callId });
-      this.removeCallFromDispatcher(dispatcherId, callId);
+      await this.removeCallFromDispatcher(dispatcherId, callId);
       void this.drainQueueForDispatcher(dispatcherId);
     }
     this.cancelTimer(callId);
-    this.callSeenDispatchers.delete(callId);
+    await this.redisService.clearSeenDispatchers(callId);
     await this.cancelOfferedDriverFcm(callId);
   }
 
   async onDriverAccepted(callId: string, ambulanceId: string): Promise<void> {
     this.cancelTimer(callId);
-    const dispatcherId = this.findHoldingDispatcher(callId);
+    const dispatcherId = await this.findHoldingDispatcher(callId);
     if (dispatcherId) {
-      this.removeCallFromDispatcher(dispatcherId, callId);
+      await this.removeCallFromDispatcher(dispatcherId, callId);
       this.dispatcherGateway.notifyDriverAccepted(dispatcherId, {
         callId,
         ambulanceId,
       });
       void this.drainQueueForDispatcher(dispatcherId);
     }
-    this.callSeenDispatchers.delete(callId);
+    await this.redisService.clearSeenDispatchers(callId);
   }
 
   async onDriverRejected(callId: string, ambulanceId: string): Promise<void> {
-    const dispatcherId = this.findHoldingDispatcher(callId);
+    const dispatcherId = await this.findHoldingDispatcher(callId);
     if (!dispatcherId) return;
     const ambulances = await this.buildAmbulanceList();
     this.dispatcherGateway.notifyDriverRejected(dispatcherId, {
@@ -132,10 +127,8 @@ export class DispatcherService implements OnModuleDestroy {
     callId: string,
     ambulanceId: string,
   ): Promise<void> {
-    if (!this.dispatcherHoldsCall(dispatcherId, callId)) {
-      throw new ForbiddenException(
-        'You are not assigned to this call',
-      );
+    if (!(await this.dispatcherHoldsCall(dispatcherId, callId))) {
+      throw new ForbiddenException('You are not assigned to this call');
     }
 
     const call = await this.callsRepository.findOne({
@@ -212,7 +205,9 @@ export class DispatcherService implements OnModuleDestroy {
     return Promise.all(calls.map((call) => this.toCallOfferPayload(call)));
   }
 
-  async getAmbulanceListForDispatchers(): Promise<DispatcherAmbulanceSummaryDto[]> {
+  async getAmbulanceListForDispatchers(): Promise<
+    DispatcherAmbulanceSummaryDto[]
+  > {
     return this.buildAmbulanceList();
   }
 
@@ -220,9 +215,6 @@ export class DispatcherService implements OnModuleDestroy {
 
   @OnEvent('dispatcher.connected')
   async onDispatcherConnected(event: { dispatcherId: string }): Promise<void> {
-    if (!this.dispatcherLoads.has(event.dispatcherId)) {
-      this.dispatcherLoads.set(event.dispatcherId, new Set());
-    }
     await this.reattachExistingCallsOnConnect(event.dispatcherId);
     await this.drainQueueForDispatcher(event.dispatcherId);
   }
@@ -231,13 +223,10 @@ export class DispatcherService implements OnModuleDestroy {
   async onDispatcherDisconnected(event: {
     dispatcherId: string;
   }): Promise<void> {
-    const held = this.dispatcherLoads.get(event.dispatcherId);
-    if (!held || held.size === 0) {
-      this.dispatcherLoads.delete(event.dispatcherId);
-      return;
-    }
-    const callIds = Array.from(held);
-    this.dispatcherLoads.delete(event.dispatcherId);
+    const callIds = await this.redisService.clearDispatcherCalls(
+      event.dispatcherId,
+    );
+    if (callIds.length === 0) return;
     for (const callId of callIds) {
       this.cancelTimer(callId);
       await this.callsRepository.update(
@@ -273,9 +262,11 @@ export class DispatcherService implements OnModuleDestroy {
   @OnEvent('ambulance.available')
   async onAmbulanceAvailable(): Promise<void> {
     const ambulances = await this.buildAmbulanceList();
-    const dispatchersWithCalls = Array.from(this.dispatcherLoads.entries())
-      .filter(([, calls]) => calls.size > 0)
-      .map(([id]) => id);
+    const onlineIds = this.dispatcherGateway.getOnlineDispatcherIds();
+    const loads = await Promise.all(
+      onlineIds.map((id) => this.redisService.getDispatcherLoad(id)),
+    );
+    const dispatchersWithCalls = onlineIds.filter((_, i) => loads[i] > 0);
     if (dispatchersWithCalls.length > 0) {
       this.dispatcherGateway.broadcastAmbulanceListUpdated(
         dispatchersWithCalls,
@@ -289,18 +280,26 @@ export class DispatcherService implements OnModuleDestroy {
 
   // ───────────────────────── Internals ─────────────────────────
 
-  private pickDispatcher(
+  private async pickDispatcher(
     callId: string,
     callerUserId: string | null,
-  ): string | null {
+  ): Promise<string | null> {
     const online = this.dispatcherGateway
       .getOnlineDispatcherIds()
       .filter((id) => id !== callerUserId);
     if (online.length === 0) return null;
 
-    const seen = this.callSeenDispatchers.get(callId) ?? new Set<string>();
+    // Fetch seen-set and every load count once, then decide synchronously.
+    const seen = new Set(await this.redisService.getSeenDispatchers(callId));
+    const loadCounts = await Promise.all(
+      online.map((id) => this.redisService.getDispatcherLoad(id)),
+    );
+    const loadByDispatcher = new Map<string, number>();
+    online.forEach((id, i) => loadByDispatcher.set(id, loadCounts[i]));
+    const loadOf = (id: string): number => loadByDispatcher.get(id) ?? 0;
+
     const eligibleWithCapacity = online.filter(
-      (id) => this.loadOf(id) < MAX_CALLS_PER_DISPATCHER,
+      (id) => loadOf(id) < MAX_CALLS_PER_DISPATCHER,
     );
 
     if (eligibleWithCapacity.length === 0) return null;
@@ -309,9 +308,9 @@ export class DispatcherService implements OnModuleDestroy {
     const pool = unseen.length > 0 ? unseen : eligibleWithCapacity;
 
     // Least-loaded; ties broken randomly.
-    pool.sort((a, b) => this.loadOf(a) - this.loadOf(b));
-    const minLoad = this.loadOf(pool[0]);
-    const tied = pool.filter((id) => this.loadOf(id) === minLoad);
+    pool.sort((a, b) => loadOf(a) - loadOf(b));
+    const minLoad = loadOf(pool[0]);
+    const tied = pool.filter((id) => loadOf(id) === minLoad);
     return tied[Math.floor(Math.random() * tied.length)];
   }
 
@@ -323,7 +322,10 @@ export class DispatcherService implements OnModuleDestroy {
     const result = await this.callsRepository
       .createQueryBuilder()
       .update(Call)
-      .set({ assignedDispatcherId: dispatcherId, dispatcherAssignedAt: new Date() })
+      .set({
+        assignedDispatcherId: dispatcherId,
+        dispatcherAssignedAt: new Date(),
+      })
       .where('id = :id', { id: callId })
       .andWhere('status = :status', { status: CallStatus.PENDING })
       .andWhere('"assignedDispatcherId" IS NULL')
@@ -336,10 +338,7 @@ export class DispatcherService implements OnModuleDestroy {
       return false;
     }
 
-    if (!this.dispatcherLoads.has(dispatcherId)) {
-      this.dispatcherLoads.set(dispatcherId, new Set());
-    }
-    this.dispatcherLoads.get(dispatcherId)!.add(callId);
+    await this.redisService.addDispatcherCall(dispatcherId, callId);
     this.scheduleTimer(callId);
 
     const [call, ambulances] = await Promise.all([
@@ -363,7 +362,7 @@ export class DispatcherService implements OnModuleDestroy {
     }
 
     this.logger.log(
-      `Assigned call ${callId} to dispatcher ${dispatcherId} (load now ${this.loadOf(
+      `Assigned call ${callId} to dispatcher ${dispatcherId} (load now ${await this.loadOf(
         dispatcherId,
       )})`,
     );
@@ -391,8 +390,7 @@ export class DispatcherService implements OnModuleDestroy {
 
   private async handleTimeout(callId: string): Promise<void> {
     // If a driver offer is already in flight for this call, don't reassign.
-    const pendingAmbulance =
-      this.driverGateway.getPendingAmbulanceId(callId);
+    const pendingAmbulance = this.driverGateway.getPendingAmbulanceId(callId);
     if (pendingAmbulance) {
       // Driver hasn't responded yet; just restart the timer.
       this.scheduleTimer(callId);
@@ -405,11 +403,11 @@ export class DispatcherService implements OnModuleDestroy {
     });
     if (!call || call.status !== CallStatus.PENDING) {
       // Call is no longer relevant.
-      this.callSeenDispatchers.delete(callId);
+      await this.redisService.clearSeenDispatchers(callId);
       return;
     }
 
-    const currentDispatcherId = this.findHoldingDispatcher(callId);
+    const currentDispatcherId = await this.findHoldingDispatcher(callId);
     if (!currentDispatcherId) {
       // No one holds it — treat as a fresh route.
       await this.routeCall(call);
@@ -417,13 +415,10 @@ export class DispatcherService implements OnModuleDestroy {
     }
 
     // Mark current dispatcher as seen for this call.
-    const seen =
-      this.callSeenDispatchers.get(callId) ?? new Set<string>();
-    seen.add(currentDispatcherId);
-    this.callSeenDispatchers.set(callId, seen);
+    await this.redisService.addSeenDispatcher(callId, currentDispatcherId);
 
     // Try to find a different eligible dispatcher (not in seen).
-    const next = this.pickDispatcher(callId, call.user?.id ?? null);
+    const next = await this.pickDispatcher(callId, call.user?.id ?? null);
 
     if (!next || next === currentDispatcherId) {
       // No alternative — fall back to keeping current dispatcher.
@@ -431,14 +426,13 @@ export class DispatcherService implements OnModuleDestroy {
         `Call ${callId} timeout: no alternative dispatcher, keeping with ${currentDispatcherId}`,
       );
       // Reset the seen-set so the current dispatcher can be picked again later.
-      seen.delete(currentDispatcherId);
-      this.callSeenDispatchers.set(callId, seen);
+      await this.redisService.removeSeenDispatcher(callId, currentDispatcherId);
       this.scheduleTimer(callId);
       return;
     }
 
     // Release current, assign to next.
-    this.removeCallFromDispatcher(currentDispatcherId, callId);
+    await this.removeCallFromDispatcher(currentDispatcherId, callId);
     this.dispatcherGateway.notifyCallReleased(currentDispatcherId, {
       callId,
       reason: 'timeout',
@@ -462,7 +456,7 @@ export class DispatcherService implements OnModuleDestroy {
 
   private async drainQueueForDispatcher(dispatcherId: string): Promise<void> {
     if (!this.dispatcherGateway.isDispatcherOnline(dispatcherId)) return;
-    while (this.loadOf(dispatcherId) < MAX_CALLS_PER_DISPATCHER) {
+    while ((await this.loadOf(dispatcherId)) < MAX_CALLS_PER_DISPATCHER) {
       const next = await this.callsRepository
         .createQueryBuilder('call')
         .where('call.status = :status', { status: CallStatus.PENDING })
@@ -494,13 +488,9 @@ export class DispatcherService implements OnModuleDestroy {
       relations: ['user', 'user.stateArchive', 'user.profile'],
     });
     if (calls.length === 0) return;
-    if (!this.dispatcherLoads.has(dispatcherId)) {
-      this.dispatcherLoads.set(dispatcherId, new Set());
-    }
-    const load = this.dispatcherLoads.get(dispatcherId)!;
     const ambulances = await this.buildAmbulanceList();
     for (const call of calls) {
-      load.add(call.id);
+      await this.redisService.addDispatcherCall(dispatcherId, call.id);
       this.scheduleTimer(call.id);
       this.dispatcherGateway.notifyCallAssigned(dispatcherId, {
         call: await this.toCallOfferPayload(call),
@@ -561,7 +551,9 @@ export class DispatcherService implements OnModuleDestroy {
     }));
   }
 
-  private async toCallOfferPayload(call: Call): Promise<DispatcherCallOfferDto> {
+  private async toCallOfferPayload(
+    call: Call,
+  ): Promise<DispatcherCallOfferDto> {
     return {
       callId: call.id,
       description: call.description,
@@ -612,28 +604,30 @@ export class DispatcherService implements OnModuleDestroy {
     };
   }
 
-  private loadOf(dispatcherId: string): number {
-    return this.dispatcherLoads.get(dispatcherId)?.size ?? 0;
+  private async loadOf(dispatcherId: string): Promise<number> {
+    return this.redisService.getDispatcherLoad(dispatcherId);
   }
 
-  private dispatcherHoldsCall(dispatcherId: string, callId: string): boolean {
-    return this.dispatcherLoads.get(dispatcherId)?.has(callId) ?? false;
+  private async dispatcherHoldsCall(
+    dispatcherId: string,
+    callId: string,
+  ): Promise<boolean> {
+    return this.redisService.dispatcherHoldsCall(dispatcherId, callId);
   }
 
-  private findHoldingDispatcher(callId: string): string | null {
-    for (const [dispatcherId, calls] of this.dispatcherLoads) {
-      if (calls.has(callId)) return dispatcherId;
-    }
-    return null;
+  private async findHoldingDispatcher(callId: string): Promise<string | null> {
+    return this.redisService.getCallHolder(callId);
   }
 
-  private removeCallFromDispatcher(dispatcherId: string, callId: string): void {
-    this.dispatcherLoads.get(dispatcherId)?.delete(callId);
+  private async removeCallFromDispatcher(
+    dispatcherId: string,
+    callId: string,
+  ): Promise<void> {
+    await this.redisService.removeDispatcherCall(dispatcherId, callId);
   }
 
   private async cancelOfferedDriverFcm(callId: string): Promise<void> {
-    const pendingAmbulanceId =
-      this.driverGateway.getPendingAmbulanceId(callId);
+    const pendingAmbulanceId = this.driverGateway.getPendingAmbulanceId(callId);
     if (!pendingAmbulanceId) return;
     try {
       const ambulance =
