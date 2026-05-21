@@ -30,7 +30,7 @@ export class AuthService {
   ) {}
 
   async initiateLogin(dto: InitiateLoginDto): Promise<{ message: string }> {
-    const stateArchive = await this.stateArchiveService.findByEgn(dto.egn);
+    const stateArchive = await this.stateArchiveService.refreshByEgn(dto.egn);
 
     if (!stateArchive) {
       throw new NotFoundException('User not found in state archive');
