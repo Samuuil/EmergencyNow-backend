@@ -26,7 +26,15 @@ import { NotificationModule } from './notification/notification.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 1000 }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: parseInt(config.get<string>('THROTTLE_TTL', '60000'), 10),
+          limit: parseInt(config.get<string>('THROTTLE_LIMIT', '1000'), 10),
+        },
+      ],
+    }),
     EventEmitterModule.forRoot(),
     RedisModule,
     TypeOrmModule.forRootAsync({

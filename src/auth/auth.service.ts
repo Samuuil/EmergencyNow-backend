@@ -127,12 +127,24 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(
       { sub: user.id, role: user.role },
-      { secret: jwtSecret, expiresIn: '1d' },
+      {
+        secret: jwtSecret,
+        expiresIn: this.configService.get<string>(
+          'JWT_ACCESS_EXPIRES_IN',
+          '1d',
+        ),
+      },
     );
 
     const refreshToken = this.jwtService.sign(
       { sub: user.id, role: user.role, jti },
-      { secret: jwtRefreshSecret, expiresIn: '30d' },
+      {
+        secret: jwtRefreshSecret,
+        expiresIn: this.configService.get<string>(
+          'JWT_REFRESH_EXPIRES_IN',
+          '30d',
+        ),
+      },
     );
 
     if (oldJti) {

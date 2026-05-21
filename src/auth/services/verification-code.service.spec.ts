@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { VerificationCodeService } from './verification-code.service';
 import { RedisService } from '../../common/redis/redis.service';
 
@@ -23,6 +24,10 @@ describe('VerificationCodeService', () => {
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((_key: string, def?: unknown) => def) },
         },
       ],
     }).compile();
