@@ -10,6 +10,8 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Call } from '../calls/entities/call.entity';
+import { StateArchive } from '../state-archive/entities/state-archive.entity';
+import { Profile } from '../profiles/entities/profile.entity';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { AmbulancesService } from '../ambulances/ambulance.service';
 import { DispatcherGateway } from '../realtime/dispatcher.gateway';
@@ -39,6 +41,8 @@ export class DispatcherService implements OnModuleDestroy {
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
+    @InjectRepository(StateArchive)
+    private readonly stateArchiveRepo: Repository<StateArchive>,
     private readonly ambulancesService: AmbulancesService,
     private readonly dispatcherGateway: DispatcherGateway,
     private readonly driverGateway: DriverGateway,
@@ -197,12 +201,15 @@ export class DispatcherService implements OnModuleDestroy {
     );
   }
 
-  async getCallsForDispatcher(dispatcherId: string): Promise<Call[]> {
-    return this.callsRepository.find({
+  async getCallsForDispatcher(
+    dispatcherId: string,
+  ): Promise<DispatcherCallOfferDto[]> {
+    const calls = await this.callsRepository.find({
       where: { assignedDispatcherId: dispatcherId, status: CallStatus.PENDING },
-      relations: ['user', 'user.stateArchive'],
+      relations: ['user', 'user.stateArchive', 'user.profile'],
       order: { createdAt: 'ASC' },
     });
+    return Promise.all(calls.map((call) => this.toCallOfferPayload(call)));
   }
 
   async getAmbulanceListForDispatchers(): Promise<DispatcherAmbulanceSummaryDto[]> {
@@ -338,14 +345,14 @@ export class DispatcherService implements OnModuleDestroy {
     const [call, ambulances] = await Promise.all([
       this.callsRepository.findOne({
         where: { id: callId },
-        relations: ['user', 'user.stateArchive'],
+        relations: ['user', 'user.stateArchive', 'user.profile'],
       }),
       this.buildAmbulanceList(),
     ]);
     if (!call) return false;
 
     this.dispatcherGateway.notifyCallAssigned(dispatcherId, {
-      call: this.toCallOfferPayload(call),
+      call: await this.toCallOfferPayload(call),
       ambulances,
     });
 
@@ -484,6 +491,7 @@ export class DispatcherService implements OnModuleDestroy {
         assignedDispatcherId: dispatcherId,
         status: CallStatus.PENDING,
       },
+      relations: ['user', 'user.stateArchive', 'user.profile'],
     });
     if (calls.length === 0) return;
     if (!this.dispatcherLoads.has(dispatcherId)) {
@@ -495,7 +503,7 @@ export class DispatcherService implements OnModuleDestroy {
       load.add(call.id);
       this.scheduleTimer(call.id);
       this.dispatcherGateway.notifyCallAssigned(dispatcherId, {
-        call: this.toCallOfferPayload(call),
+        call: await this.toCallOfferPayload(call),
         ambulances,
       });
     }
@@ -553,7 +561,7 @@ export class DispatcherService implements OnModuleDestroy {
     }));
   }
 
-  private toCallOfferPayload(call: Call): DispatcherCallOfferDto {
+  private async toCallOfferPayload(call: Call): Promise<DispatcherCallOfferDto> {
     return {
       callId: call.id,
       description: call.description,
@@ -561,6 +569,46 @@ export class DispatcherService implements OnModuleDestroy {
       longitude: call.longitude,
       createdAt: call.createdAt?.toISOString?.() ?? new Date().toISOString(),
       userName: call.user?.stateArchive?.fullName ?? null,
+      patient: await this.resolvePatient(call),
+    };
+  }
+
+  private async resolvePatient(
+    call: Call,
+  ): Promise<DispatcherCallOfferDto['patient']> {
+    if (!call.patientEgn) {
+      const archive = call.user?.stateArchive ?? null;
+      if (!archive) return null;
+      return this.buildPatientData(archive, call.user?.profile ?? null);
+    }
+
+    const archive = await this.stateArchiveRepo.findOne({
+      where: { egn: call.patientEgn },
+      relations: ['user', 'user.profile'],
+    });
+    if (!archive) return null;
+    return this.buildPatientData(archive, archive.user?.profile ?? null);
+  }
+
+  private buildPatientData(
+    archive: StateArchive,
+    profile: Profile | null,
+  ): DispatcherCallOfferDto['patient'] {
+    return {
+      egn: archive.egn,
+      fullName: archive.fullName,
+      phoneNumber: archive.phoneNumber,
+      email: archive.email,
+      bloodType: profile?.bloodType ?? null,
+      allergies: profile?.allergies ?? null,
+      medicines: profile?.medicines ?? null,
+      illnesses: profile?.illnesses ?? null,
+      height: profile?.height ?? null,
+      weight: profile?.weight ?? null,
+      gender: profile?.gender ?? null,
+      dateOfBirth: profile?.dateOfBirth
+        ? new Date(profile.dateOfBirth).toISOString()
+        : null,
     };
   }
 
