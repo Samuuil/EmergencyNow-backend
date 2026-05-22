@@ -21,7 +21,6 @@ describe('AmbulancesService', () => {
   let service: AmbulancesService;
   let ambulanceRepository: jest.Mocked<Repository<Ambulance>>;
   let usersService: jest.Mocked<UsersService>;
-  let googleMapsService: jest.Mocked<GoogleMapsService>;
 
   const mockAmbulance: Ambulance = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -88,7 +87,6 @@ describe('AmbulancesService', () => {
     service = module.get<AmbulancesService>(AmbulancesService);
     ambulanceRepository = module.get(getRepositoryToken(Ambulance));
     usersService = module.get(UsersService);
-    googleMapsService = module.get(GoogleMapsService);
 
     jest.clearAllMocks();
   });

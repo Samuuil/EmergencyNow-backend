@@ -268,7 +268,9 @@ describe('ProfilesService', () => {
 
     it('should create a new profile when user has no profile', async () => {
       const userWithoutProfile = { ...mockUser, profile: null };
-      usersService.findByIdWithProfile.mockResolvedValue(userWithoutProfile as any);
+      usersService.findByIdWithProfile.mockResolvedValue(
+        userWithoutProfile as any,
+      );
       profileRepository.create.mockReturnValue(mockProfile);
       profileRepository.save.mockResolvedValue(mockProfile);
       usersService.linkProfile.mockResolvedValue(undefined);
@@ -304,7 +306,9 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on error', async () => {
-      usersService.findByIdWithProfile.mockRejectedValue(new Error('Database error'));
+      usersService.findByIdWithProfile.mockRejectedValue(
+        new Error('Database error'),
+      );
 
       await expect(
         service.createOrUpdateForUser(userId, profileDto),
@@ -334,7 +338,9 @@ describe('ProfilesService', () => {
 
     it('should throw NotFoundException when user has no profile', async () => {
       const userWithoutProfile = { ...mockUser, profile: null };
-      usersService.findByIdWithProfile.mockResolvedValue(userWithoutProfile as any);
+      usersService.findByIdWithProfile.mockResolvedValue(
+        userWithoutProfile as any,
+      );
 
       await expect(service.getProfileForUser(userId)).rejects.toThrow(
         NotFoundException,
@@ -342,7 +348,9 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on database error', async () => {
-      usersService.findByIdWithProfile.mockRejectedValue(new Error('Database error'));
+      usersService.findByIdWithProfile.mockRejectedValue(
+        new Error('Database error'),
+      );
 
       await expect(service.getProfileForUser(userId)).rejects.toThrow(
         InternalServerErrorException,
@@ -358,12 +366,16 @@ describe('ProfilesService', () => {
         ...mockUser,
         stateArchive: { egn: '9001011234' },
       };
-      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(userWithEgn as any);
+      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(
+        userWithEgn as any,
+      );
 
       const result = await service.getProfileByEgn(egn);
 
       expect(result).toEqual(mockProfile);
-      expect(usersService.findByEgnWithProfileAndStateArchive).toHaveBeenCalledWith(egn);
+      expect(
+        usersService.findByEgnWithProfileAndStateArchive,
+      ).toHaveBeenCalledWith(egn);
     });
 
     it('should throw NotFoundException when user not found', async () => {
@@ -380,7 +392,9 @@ describe('ProfilesService', () => {
         profile: null,
         stateArchive: { egn },
       };
-      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(userWithoutProfile as any);
+      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(
+        userWithoutProfile as any,
+      );
 
       await expect(service.getProfileByEgn(egn)).rejects.toThrow(
         NotFoundException,
@@ -388,7 +402,9 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on database error', async () => {
-      usersService.findByEgnWithProfileAndStateArchive.mockRejectedValue(new Error('Database error'));
+      usersService.findByEgnWithProfileAndStateArchive.mockRejectedValue(
+        new Error('Database error'),
+      );
 
       await expect(service.getProfileByEgn(egn)).rejects.toThrow(
         InternalServerErrorException,

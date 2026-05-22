@@ -300,7 +300,9 @@ describe('UsersService', () => {
     it('should throw raw error on database error', async () => {
       repository.findOne.mockRejectedValue(new Error('Database error'));
 
-      await expect(service.findUserRole(userId)).rejects.toThrow('Database error');
+      await expect(service.findUserRole(userId)).rejects.toThrow(
+        'Database error',
+      );
     });
   });
 

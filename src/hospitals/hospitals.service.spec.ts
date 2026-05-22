@@ -370,7 +370,10 @@ describe('HospitalsService', () => {
       googleMapsService.findHospitalsByTextSearch.mockResolvedValue(mockPlaces);
       hospitalRepository.find.mockResolvedValue([]);
       hospitalRepository.create.mockImplementation((dto) => dto as Hospital);
-      hospitalRepository.save.mockResolvedValue([mockHospital, mockHospital] as any);
+      hospitalRepository.save.mockResolvedValue([
+        mockHospital,
+        mockHospital,
+      ] as any);
 
       await service.syncHospitalsFromGooglePlaces(mockLocation, 20000);
 
@@ -398,7 +401,10 @@ describe('HospitalsService', () => {
       const existingHospital1 = { ...mockHospital, placeId: 'ChIJ_new1' };
       const existingHospital2 = { ...mockHospital, placeId: 'ChIJ_new2' };
       googleMapsService.findHospitalsByTextSearch.mockResolvedValue(mockPlaces);
-      hospitalRepository.find.mockResolvedValue([existingHospital1, existingHospital2]);
+      hospitalRepository.find.mockResolvedValue([
+        existingHospital1,
+        existingHospital2,
+      ]);
 
       await service.syncHospitalsFromGooglePlaces(mockLocation);
 
