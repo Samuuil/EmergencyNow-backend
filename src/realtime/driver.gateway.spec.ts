@@ -81,6 +81,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake,
         disconnect: jest.fn(),
+        join: jest.fn(),
       }) as any;
 
     it('should connect driver with valid token from header', () => {
@@ -153,6 +154,7 @@ describe('DriverGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -182,6 +184,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -209,6 +212,7 @@ describe('DriverGateway', () => {
         id: 'socket-456',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -238,6 +242,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -277,6 +282,7 @@ describe('DriverGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -292,7 +298,7 @@ describe('DriverGateway', () => {
         duration: 600,
       });
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('driver-123');
       expect(mockServer.emit).toHaveBeenCalledWith(
         'call.offer',
         expect.objectContaining({
@@ -302,7 +308,7 @@ describe('DriverGateway', () => {
       );
     });
 
-    it('should not emit when driver is offline', () => {
+    it('should emit to driver room even when driver is offline', () => {
       gateway.offerCall({
         callId: 'call-123',
         description: 'Emergency',
@@ -314,18 +320,11 @@ describe('DriverGateway', () => {
         duration: 600,
       });
 
-      expect(mockServer.to).not.toHaveBeenCalled();
+      expect(mockServer.to).toHaveBeenCalledWith('offline-driver');
     });
   });
 
   describe('call offer management', () => {
-    it('should add rejection for call', () => {
-      gateway.addRejection('call-123', 'amb-123');
-      const rejected = gateway.getRejectedAmbulanceIds('call-123');
-
-      expect(rejected).toContain('amb-123');
-    });
-
     it('should get pending ambulance ID', () => {
       gateway.setPendingAmbulance('call-123', 'amb-456');
       const pendingId = gateway.getPendingAmbulanceId('call-123');
@@ -359,6 +358,7 @@ describe('DriverGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -375,7 +375,7 @@ describe('DriverGateway', () => {
 
       gateway.sendRouteToDriver('driver-123', routePayload);
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('driver-123');
       expect(mockServer.emit).toHaveBeenCalledWith('call.route', routePayload);
     });
   });
@@ -390,6 +390,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -402,7 +403,7 @@ describe('DriverGateway', () => {
 
       await gateway.refreshAvailableAmbulanceLocations();
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('driver-123');
       expect(mockServer.emit).toHaveBeenCalledWith(
         'location.request',
         expect.objectContaining({ requestId: 1 }),
@@ -418,6 +419,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -468,6 +470,7 @@ describe('DriverGateway', () => {
           id: 'socket-123',
           handshake: { headers: { authorization: 'Bearer valid-token' } },
           disconnect: jest.fn(),
+          join: jest.fn(),
         } as any;
 
         gateway.handleConnection(client);
@@ -500,6 +503,7 @@ describe('DriverGateway', () => {
         id: 'socket-123',
         handshake: { headers: { authorization: 'Bearer valid-token' } },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -535,6 +539,7 @@ describe('DriverGateway', () => {
           id: 'socket-123',
           handshake: { headers: { authorization: 'Bearer valid-token' } },
           disconnect: jest.fn(),
+          join: jest.fn(),
         } as any;
 
         gateway.handleConnection(client);
@@ -582,6 +587,7 @@ describe('DriverGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);

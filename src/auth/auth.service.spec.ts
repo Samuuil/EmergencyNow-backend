@@ -31,6 +31,7 @@ describe('AuthService', () => {
 
   const mockStateArchiveService = {
     findByEgn: jest.fn(),
+    refreshByEgn: jest.fn(),
   };
 
   const mockJwtService = {
@@ -119,7 +120,7 @@ describe('AuthService', () => {
     };
 
     it('should send verification code via email', async () => {
-      stateArchiveService.findByEgn.mockResolvedValue(mockStateArchive as any);
+      stateArchiveService.refreshByEgn.mockResolvedValue(mockStateArchive as any);
       verificationCodeService.generateCode.mockReturnValue('123456');
       verificationCodeService.saveCode.mockResolvedValue();
       mailService.sendVerificationCode.mockResolvedValue();
@@ -129,7 +130,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         message: 'Verification code sent to your email',
       });
-      expect(stateArchiveService.findByEgn).toHaveBeenCalledWith('1234567890');
+      expect(stateArchiveService.refreshByEgn).toHaveBeenCalledWith('1234567890');
       expect(verificationCodeService.saveCode).toHaveBeenCalledWith(
         '1234567890',
         '123456',
@@ -147,7 +148,7 @@ describe('AuthService', () => {
         egn: '1234567890',
         method: LoginMethod.SMS,
       };
-      stateArchiveService.findByEgn.mockResolvedValue(mockStateArchive as any);
+      stateArchiveService.refreshByEgn.mockResolvedValue(mockStateArchive as any);
       verificationCodeService.generateCode.mockReturnValue('123456');
       verificationCodeService.saveCode.mockResolvedValue();
       smsService.sendVerificationCode.mockResolvedValue();
@@ -165,7 +166,7 @@ describe('AuthService', () => {
     });
 
     it('should throw NotFoundException when user not in state archive', async () => {
-      stateArchiveService.findByEgn.mockResolvedValue(null);
+      stateArchiveService.refreshByEgn.mockResolvedValue(null);
 
       await expect(service.initiateLogin(initiateLoginDto)).rejects.toThrow(
         'User not found in state archive',

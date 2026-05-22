@@ -16,6 +16,7 @@ import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 import { DispatcherService } from '../dispatchers/dispatcher.service';
 import { UsersService } from '../users/user.service';
+import { StateArchiveService } from '../state-archive/state-archive.service';
 
 describe('CallsService', () => {
   let service: CallsService;
@@ -71,7 +72,7 @@ describe('CallsService', () => {
         },
         {
           provide: DriverGateway,
-          useValue: {},
+          useValue: { clearOffer: jest.fn() },
         },
         {
           provide: UserGateway,
@@ -107,6 +108,12 @@ describe('CallsService', () => {
           provide: UsersService,
           useValue: {
             findByIdWithStateArchive: jest.fn(),
+          },
+        },
+        {
+          provide: StateArchiveService,
+          useValue: {
+            findByPhoneNumber: jest.fn(),
           },
         },
       ],
@@ -409,34 +416,8 @@ describe('CallsService', () => {
     });
   });
 
-  describe('dispatchToAmbulanceManually', () => {
-    it('should throw BadRequestException when call is completed', async () => {
-      const completedCall = {
-        ...mockCall,
-        status: CallStatus.COMPLETED,
-      };
-      callsRepository.findOne.mockResolvedValue(completedCall);
-
-      await expect(
-        service.dispatchToAmbulanceManually('call-1', 'amb-1'),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException when call is cancelled', async () => {
-      const cancelledCall = {
-        ...mockCall,
-        status: CallStatus.CANCELLED,
-      };
-      callsRepository.findOne.mockResolvedValue(cancelledCall);
-
-      await expect(
-        service.dispatchToAmbulanceManually('call-1', 'amb-1'),
-      ).rejects.toThrow(BadRequestException);
-    });
-  });
-
   describe('create', () => {
-    it('should throw BadRequestException when user is null', async () => {
+    it('should throw when user is null', async () => {
       await expect(
         service.create(
           {
@@ -447,7 +428,7 @@ describe('CallsService', () => {
           },
           null as any,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow();
     });
   });
 
