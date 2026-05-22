@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
@@ -31,6 +31,7 @@ describe('AuthService', () => {
 
   const mockStateArchiveService = {
     findByEgn: jest.fn(),
+    refreshByEgn: jest.fn(),
   };
 
   const mockJwtService = {
@@ -87,7 +88,10 @@ describe('AuthService', () => {
         { provide: MailService, useValue: mockMailService },
         { provide: SmsService, useValue: mockSmsService },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: VerificationCodeService, useValue: mockVerificationCodeService },
+        {
+          provide: VerificationCodeService,
+          useValue: mockVerificationCodeService,
+        },
         { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
@@ -116,15 +120,17 @@ describe('AuthService', () => {
     };
 
     it('should send verification code via email', async () => {
-      stateArchiveService.findByEgn.mockResolvedValue(mockStateArchive as any);
+      stateArchiveService.refreshByEgn.mockResolvedValue(mockStateArchive as any);
       verificationCodeService.generateCode.mockReturnValue('123456');
       verificationCodeService.saveCode.mockResolvedValue();
       mailService.sendVerificationCode.mockResolvedValue();
 
       const result = await service.initiateLogin(initiateLoginDto);
 
-      expect(result).toEqual({ message: 'Verification code sent to your email' });
-      expect(stateArchiveService.findByEgn).toHaveBeenCalledWith('1234567890');
+      expect(result).toEqual({
+        message: 'Verification code sent to your email',
+      });
+      expect(stateArchiveService.refreshByEgn).toHaveBeenCalledWith('1234567890');
       expect(verificationCodeService.saveCode).toHaveBeenCalledWith(
         '1234567890',
         '123456',
@@ -138,15 +144,20 @@ describe('AuthService', () => {
     });
 
     it('should send verification code via SMS', async () => {
-      const smsDto: InitiateLoginDto = { egn: '1234567890', method: LoginMethod.SMS };
-      stateArchiveService.findByEgn.mockResolvedValue(mockStateArchive as any);
+      const smsDto: InitiateLoginDto = {
+        egn: '1234567890',
+        method: LoginMethod.SMS,
+      };
+      stateArchiveService.refreshByEgn.mockResolvedValue(mockStateArchive as any);
       verificationCodeService.generateCode.mockReturnValue('123456');
       verificationCodeService.saveCode.mockResolvedValue();
       smsService.sendVerificationCode.mockResolvedValue();
 
       const result = await service.initiateLogin(smsDto);
 
-      expect(result).toEqual({ message: 'Verification code sent to your phone' });
+      expect(result).toEqual({
+        message: 'Verification code sent to your phone',
+      });
       expect(smsService.sendVerificationCode).toHaveBeenCalledWith(
         '+1234567890',
         '123456',
@@ -155,7 +166,7 @@ describe('AuthService', () => {
     });
 
     it('should throw NotFoundException when user not in state archive', async () => {
-      stateArchiveService.findByEgn.mockResolvedValue(null);
+      stateArchiveService.refreshByEgn.mockResolvedValue(null);
 
       await expect(service.initiateLogin(initiateLoginDto)).rejects.toThrow(
         'User not found in state archive',
@@ -178,7 +189,10 @@ describe('AuthService', () => {
 
       const result = await service.verifyCode(verifyCodeDto);
 
-      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
       expect(redisService.storeRefreshJti).toHaveBeenCalledWith(
         'user-123',
         expect.any(String),
@@ -189,7 +203,9 @@ describe('AuthService', () => {
       verificationCodeService.verifyAndConsumeCode.mockResolvedValue(undefined);
       stateArchiveService.findByEgn.mockResolvedValue(mockStateArchive as any);
       usersService.findByStateArchiveId.mockResolvedValue(null);
-      usersService.createWithExistingStateArchive.mockResolvedValue(mockUser as any);
+      usersService.createWithExistingStateArchive.mockResolvedValue(
+        mockUser as any,
+      );
       configService.get.mockReturnValue('test-secret');
       jwtService.sign
         .mockReturnValueOnce('access-token')
@@ -198,15 +214,22 @@ describe('AuthService', () => {
 
       const result = await service.verifyCode(verifyCodeDto);
 
-      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
-      expect(usersService.createWithExistingStateArchive).toHaveBeenCalledWith('archive-123');
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+      expect(usersService.createWithExistingStateArchive).toHaveBeenCalledWith(
+        'archive-123',
+      );
     });
 
     it('should throw NotFoundException when state archive not found', async () => {
       verificationCodeService.verifyAndConsumeCode.mockResolvedValue(undefined);
       stateArchiveService.findByEgn.mockResolvedValue(null);
 
-      await expect(service.verifyCode(verifyCodeDto)).rejects.toThrow(NotFoundException);
+      await expect(service.verifyCode(verifyCodeDto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

@@ -225,46 +225,6 @@ describe('AmbulancesController', () => {
     });
   });
 
-  describe('removeDriver', () => {
-    const ambulanceId = '123e4567-e89b-12d3-a456-426614174000';
-
-    it('should remove driver from ambulance', async () => {
-      service.removeDriver.mockResolvedValue(mockAmbulance);
-
-      const result = await controller.removeDriver(ambulanceId);
-
-      expect(result).toEqual(mockAmbulance);
-      expect(service.removeDriver).toHaveBeenCalledWith(ambulanceId);
-    });
-  });
-
-  describe('markAsAvailable', () => {
-    const ambulanceId = '123e4567-e89b-12d3-a456-426614174000';
-
-    it('should mark ambulance as available', async () => {
-      service.markAsAvailable.mockResolvedValue(mockAmbulance);
-
-      const result = await controller.markAsAvailable(ambulanceId);
-
-      expect(result).toEqual(mockAmbulance);
-      expect(service.markAsAvailable).toHaveBeenCalledWith(ambulanceId);
-    });
-  });
-
-  describe('markAsDispatched', () => {
-    const ambulanceId = '123e4567-e89b-12d3-a456-426614174000';
-
-    it('should mark ambulance as dispatched', async () => {
-      const dispatchedAmbulance = { ...mockAmbulance, available: false };
-      service.markAsDispatched.mockResolvedValue(dispatchedAmbulance);
-
-      const result = await controller.markAsDispatched(ambulanceId);
-
-      expect(result).toEqual(dispatchedAmbulance);
-      expect(service.markAsDispatched).toHaveBeenCalledWith(ambulanceId);
-    });
-  });
-
   describe('remove', () => {
     const ambulanceId = '123e4567-e89b-12d3-a456-426614174000';
 

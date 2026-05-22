@@ -41,10 +41,7 @@ export class NotificationService {
     });
   }
 
-  async sendCallCancelled(
-    driverUserId: string,
-    callId: string,
-  ): Promise<void> {
+  async sendCallCancelled(driverUserId: string, callId: string): Promise<void> {
     await this.sendDataPush(driverUserId, NotificationTypeEnum.CallCancelled, {
       callId,
     });
@@ -105,7 +102,12 @@ export class NotificationService {
     const result: Record<string, string> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined || value === null) continue;
-      result[key] = typeof value === 'string' ? value : String(value);
+      result[key] =
+        typeof value === 'string'
+          ? value
+          : typeof value === 'object'
+            ? JSON.stringify(value)
+            : String(value as number | boolean | bigint);
     }
     return result;
   }

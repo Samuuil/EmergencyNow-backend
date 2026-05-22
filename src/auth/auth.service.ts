@@ -82,7 +82,8 @@ export class AuthService {
     oldRefreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     let payload: { sub: string; jti: string; [key: string]: any };
-    const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    const jwtRefreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET');
     if (!jwtRefreshSecret) {
       throw new Error('JWT_REFRESH_SECRET must be configured');
     }
@@ -117,7 +118,8 @@ export class AuthService {
     oldJti?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    const jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    const jwtRefreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET');
 
     if (!jwtSecret || !jwtRefreshSecret) {
       throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be configured');

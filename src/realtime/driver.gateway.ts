@@ -77,7 +77,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         role: payload.role,
       };
 
-      client.join(payload.sub);
+      void client.join(payload.sub);
       this.onlineDrivers.add(payload.sub);
       this.logger.log(
         `Driver ${payload.sub} connected via WS (socket ${client.id})`,
@@ -240,7 +240,10 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async refreshAvailableAmbulanceLocations(): Promise<void> {
     const now = Date.now();
-    if (now - this.lastRefreshStartedAt < DriverGateway.MIN_REFRESH_INTERVAL_MS) {
+    if (
+      now - this.lastRefreshStartedAt <
+      DriverGateway.MIN_REFRESH_INTERVAL_MS
+    ) {
       this.logger.log(
         'Location refresh throttled; sharing an existing in-flight window',
       );

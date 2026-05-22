@@ -29,10 +29,7 @@ import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
 import { DispatcherService } from '../dispatchers/dispatcher.service';
 import { StateArchiveService } from '../state-archive/state-archive.service';
-import {
-  CallErrorCode,
-  CallErrorMessages,
-} from './errors/call-errors.enum';
+import { CallErrorCode, CallErrorMessages } from './errors/call-errors.enum';
 
 const ACTIVE_CALL_STATUSES = [
   CallStatus.PENDING,
@@ -141,14 +138,20 @@ export class CallsService {
   @OnEvent('driver.responded')
   async onDriverResponded(event: DriverRespondedEvent): Promise<void> {
     try {
-      await this.handleDriverResponse(event.callId, event.driverId, event.accept);
+      await this.handleDriverResponse(
+        event.callId,
+        event.driverId,
+        event.accept,
+      );
     } catch (e) {
       this.logger.error(`Failed to handle driver.responded event`, e);
     }
   }
 
   @OnEvent('driver.location.updated')
-  async onDriverLocationUpdated(event: DriverLocationUpdatedEvent): Promise<void> {
+  async onDriverLocationUpdated(
+    event: DriverLocationUpdatedEvent,
+  ): Promise<void> {
     try {
       const call = await this.updateAmbulanceLocation(
         event.callId,
@@ -158,7 +161,11 @@ export class CallsService {
       this.logger.log(
         `[driver.location.updated] Updated call ${call.id}, userId=${call.user?.id}`,
       );
-      if (call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
+      if (
+        call.routePolyline &&
+        call.estimatedDistance &&
+        call.estimatedDuration
+      ) {
         this.driverGateway.sendRouteToDriver(event.driverId, {
           callId: call.id,
           route: {
@@ -506,7 +513,10 @@ export class CallsService {
       hospital.name,
       route.duration,
     ).catch((err) =>
-      this.logger.error('Failed to notify emergency contacts about hospital:', err),
+      this.logger.error(
+        'Failed to notify emergency contacts about hospital:',
+        err,
+      ),
     );
 
     return savedCall;
@@ -555,9 +565,7 @@ export class CallsService {
     }
 
     const userName =
-      user.stateArchive?.fullName ||
-      user.stateArchive?.email ||
-      'A user';
+      user.stateArchive?.fullName || user.stateArchive?.email || 'A user';
 
     const emailPromises = contacts
       .filter((contact) => contact.email)

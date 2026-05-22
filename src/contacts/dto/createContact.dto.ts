@@ -1,6 +1,9 @@
 import { IsString, IsEmail, IsOptional, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ContactErrorMessages, ContactErrorCode } from '../errors/contact-errors.enum';
+import {
+  ContactErrorMessages,
+  ContactErrorCode,
+} from '../errors/contact-errors.enum';
 
 export class CreateContactDto {
   @ApiProperty({ description: 'Contact name', example: 'John Doe' })

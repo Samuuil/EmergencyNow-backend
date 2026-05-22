@@ -56,7 +56,8 @@ export class DispatcherGateway
         secret: jwtSecret,
       });
 
-      if (payload.role !== Role.DISPATCHER && payload.role !== Role.ADMIN) {
+      const role = payload.role as Role;
+      if (role !== Role.DISPATCHER && role !== Role.ADMIN) {
         this.logger.warn(
           `User ${payload.sub} with role ${payload.role} tried to connect to /dispatchers; disconnecting.`,
         );
@@ -66,7 +67,7 @@ export class DispatcherGateway
 
       client.user = { id: payload.sub, role: payload.role };
 
-      client.join(payload.sub);
+      void client.join(payload.sub);
       this.onlineDispatchers.add(payload.sub);
       this.logger.log(
         `Dispatcher ${payload.sub} connected via WS (socket ${client.id})`,
@@ -142,10 +143,7 @@ export class DispatcherGateway
     this.emitToDispatcher(dispatcherId, 'call.released', payload);
   }
 
-  notifyCallCancelled(
-    dispatcherId: string,
-    payload: { callId: string },
-  ): void {
+  notifyCallCancelled(dispatcherId: string, payload: { callId: string }): void {
     this.emitToDispatcher(dispatcherId, 'call.cancelled', payload);
   }
 

@@ -131,82 +131,6 @@ describe('GoogleMapsService', () => {
     });
   });
 
-  describe('getDistanceAndDuration', () => {
-    const origin = { latitude: 42.6977, longitude: 23.3219 };
-    const destination = { latitude: 42.7, longitude: 23.35 };
-
-    it('should get distance and duration successfully', async () => {
-      const mockResponse = [
-        {
-          distanceMeters: 5000,
-          duration: '600s',
-          status: 'OK',
-        },
-      ];
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as Response);
-
-      const result = await service.getDistanceAndDuration(origin, destination);
-
-      expect(result).toEqual({
-        distance: 5000,
-        duration: 600,
-      });
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'X-Goog-Api-Key': 'test-api-key',
-          }),
-        }),
-      );
-    });
-
-    it('should throw error when status is not OK', async () => {
-      const mockResponse = [
-        {
-          status: 'NOT_FOUND',
-        },
-      ];
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as Response);
-
-      await expect(
-        service.getDistanceAndDuration(origin, destination),
-      ).rejects.toThrow('No route available: NOT_FOUND');
-    });
-
-    it('should throw error when no data returned', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve([]),
-      } as Response);
-
-      await expect(
-        service.getDistanceAndDuration(origin, destination),
-      ).rejects.toThrow('No distance data returned');
-    });
-
-    it('should throw error when API request fails', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve('Internal server error'),
-      } as Response);
-
-      await expect(
-        service.getDistanceAndDuration(origin, destination),
-      ).rejects.toThrow('Routes API error: 500 - Internal server error');
-    });
-  });
-
   describe('getDistancesToMultipleDestinations', () => {
     const origin = { latitude: 42.6977, longitude: 23.3219 };
     const destinations = [
@@ -219,12 +143,12 @@ describe('GoogleMapsService', () => {
         {
           distanceMeters: 5000,
           duration: '600s',
-          status: 'OK',
+          condition: 'ROUTE_EXISTS',
         },
         {
           distanceMeters: 8000,
           duration: '900s',
-          status: 'OK',
+          condition: 'ROUTE_EXISTS',
         },
       ];
 
@@ -249,10 +173,10 @@ describe('GoogleMapsService', () => {
         {
           distanceMeters: 5000,
           duration: '600s',
-          status: 'OK',
+          condition: 'ROUTE_EXISTS',
         },
         {
-          status: 'NOT_FOUND',
+          condition: 'ROUTE_NOT_FOUND',
         },
       ];
 
