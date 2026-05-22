@@ -159,15 +159,8 @@ describe('WsJwtGuard', () => {
       expect(() => guard.canActivate(context)).toThrow('Invalid token');
     });
 
-    it('should use default secret when JWT_SECRET is not configured', () => {
-      const mockPayload = {
-        sub: 'user-123',
-        role: 'USER',
-        egn: '1234567890',
-      };
-
+    it('should throw Error when JWT_SECRET is not configured', () => {
       configService.get.mockReturnValue(undefined);
-      jwtService.verify.mockReturnValue(mockPayload);
 
       const client = createMockClient({
         headers: {
@@ -176,11 +169,10 @@ describe('WsJwtGuard', () => {
       });
 
       const context = createMockContext(client);
-      guard.canActivate(context);
 
-      expect(jwtService.verify).toHaveBeenCalledWith('valid-token', {
-        secret: 'defaultSecret',
-      });
+      expect(() => guard.canActivate(context)).toThrow(
+        'JWT_SECRET must be configured',
+      );
     });
 
     it('should handle uppercase Authorization header', () => {

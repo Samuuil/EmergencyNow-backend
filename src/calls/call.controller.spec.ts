@@ -8,6 +8,7 @@ import { User } from '../users/entities/user.entity';
 import { CallStatus } from '../common/enums/call-status.enum';
 import { Role } from '../common/enums/role.enum';
 import { PaginateQuery } from 'nestjs-paginate';
+import { CallCleanupService } from './call-cleanup.service';
 
 describe('CallsController', () => {
   let controller: CallsController;
@@ -73,6 +74,10 @@ describe('CallsController', () => {
         {
           provide: CallsService,
           useValue: mockCallsService,
+        },
+        {
+          provide: CallCleanupService,
+          useValue: {},
         },
       ],
     }).compile();
@@ -176,29 +181,6 @@ describe('CallsController', () => {
     });
   });
 
-  describe('getTrackingData', () => {
-    const callId = 'call-123';
-
-    it('should return tracking data', async () => {
-      const trackingData = {
-        call: mockCall,
-        currentLocation: { latitude: 42.7, longitude: 23.3 },
-        route: {
-          polyline: 'encoded',
-          distance: 5000,
-          duration: 600,
-          steps: [],
-        },
-      };
-      service.getTrackingData.mockResolvedValue(trackingData);
-
-      const result = await controller.getTrackingData(callId);
-
-      expect(result).toEqual(trackingData);
-      expect(service.getTrackingData).toHaveBeenCalledWith(callId);
-    });
-  });
-
   describe('getHospitalsForCall', () => {
     const callId = 'call-123';
     const body = { latitude: 42.7, longitude: 23.3 };
@@ -273,30 +255,6 @@ describe('CallsController', () => {
 
       expect(result).toEqual(routeData);
       expect(service.getHospitalRouteData).toHaveBeenCalledWith(callId);
-    });
-  });
-
-
-  describe('updateAmbulanceLocation', () => {
-    const callId = 'call-123';
-    const body = { latitude: 42.7, longitude: 23.3 };
-
-    it('should update ambulance location', async () => {
-      const updatedCall = {
-        ...mockCall,
-        ambulanceCurrentLatitude: 42.7,
-        ambulanceCurrentLongitude: 23.3,
-      };
-      service.updateAmbulanceLocation.mockResolvedValue(updatedCall);
-
-      const result = await controller.updateAmbulanceLocation(callId, body);
-
-      expect(result).toEqual(updatedCall);
-      expect(service.updateAmbulanceLocation).toHaveBeenCalledWith(
-        callId,
-        42.7,
-        23.3,
-      );
     });
   });
 

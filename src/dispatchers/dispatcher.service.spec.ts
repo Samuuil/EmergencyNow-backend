@@ -20,7 +20,9 @@ describe('DispatcherService', () => {
 
   beforeEach(async () => {
     const mockDriverGateway = {
-      refreshAvailableAmbulanceLocations: jest.fn().mockResolvedValue(undefined),
+      refreshAvailableAmbulanceLocations: jest
+        .fn()
+        .mockResolvedValue(undefined),
       isDriverOnline: jest.fn().mockReturnValue(true),
     };
 
@@ -80,7 +82,9 @@ describe('DispatcherService', () => {
   describe('onRefreshRequested', () => {
     it('should delegate to DriverGateway.refreshAvailableAmbulanceLocations', async () => {
       await service.onRefreshRequested();
-      expect(driverGateway.refreshAvailableAmbulanceLocations).toHaveBeenCalledTimes(1);
+      expect(
+        driverGateway.refreshAvailableAmbulanceLocations,
+      ).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -105,7 +109,9 @@ describe('DispatcherService', () => {
 
       await service.onLocationsRefreshed();
 
-      expect(dispatcherGateway.broadcastAmbulanceListUpdated).toHaveBeenCalledWith(
+      expect(
+        dispatcherGateway.broadcastAmbulanceListUpdated,
+      ).toHaveBeenCalledWith(
         ['dispatcher-1', 'dispatcher-2'],
         expect.objectContaining({
           ambulances: expect.arrayContaining([
@@ -120,7 +126,9 @@ describe('DispatcherService', () => {
 
       await service.onLocationsRefreshed();
 
-      expect(dispatcherGateway.broadcastAmbulanceListUpdated).not.toHaveBeenCalled();
+      expect(
+        dispatcherGateway.broadcastAmbulanceListUpdated,
+      ).not.toHaveBeenCalled();
       expect(ambulancesService.findAvailableList).not.toHaveBeenCalled();
     });
   });

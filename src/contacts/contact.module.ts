@@ -9,7 +9,11 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { UsersModule } from '../users/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Contact]), UsersModule, JwtModule.register({})],
+  imports: [
+    TypeOrmModule.forFeature([Contact]),
+    UsersModule,
+    JwtModule.register({}),
+  ],
   controllers: [ContactsController],
   providers: [ContactsService, JwtAuthGuard, RolesGuard],
   exports: [ContactsService],

@@ -3,7 +3,7 @@ import { ProfilesService } from './profile.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Profile } from './entities/profile.entity';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 import {
   NotFoundException,
   InternalServerErrorException,
@@ -17,7 +17,7 @@ jest.mock('nestjs-paginate');
 describe('ProfilesService', () => {
   let service: ProfilesService;
   let profileRepository: jest.Mocked<Repository<Profile>>;
-  let userRepository: jest.Mocked<Repository<User>>;
+  let usersService: jest.Mocked<UsersService>;
 
   const mockProfile: Profile = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -32,10 +32,10 @@ describe('ProfilesService', () => {
     user: {} as User,
   };
 
-  const mockUser: User = {
+  const mockUser = {
     id: '123e4567-e89b-12d3-a456-426614174001',
     profile: mockProfile,
-  } as User;
+  };
 
   const mockProfileRepository = {
     create: jest.fn(),
@@ -46,9 +46,10 @@ describe('ProfilesService', () => {
     delete: jest.fn(),
   };
 
-  const mockUserRepository = {
-    findOne: jest.fn(),
-    save: jest.fn(),
+  const mockUsersService = {
+    findByIdWithProfile: jest.fn(),
+    linkProfile: jest.fn(),
+    findByEgnWithProfileAndStateArchive: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -60,15 +61,15 @@ describe('ProfilesService', () => {
           useValue: mockProfileRepository,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
+          provide: UsersService,
+          useValue: mockUsersService,
         },
       ],
     }).compile();
 
     service = module.get<ProfilesService>(ProfilesService);
     profileRepository = module.get(getRepositoryToken(Profile));
-    userRepository = module.get(getRepositoryToken(User));
+    usersService = module.get(UsersService);
 
     jest.clearAllMocks();
   });
@@ -267,13 +268,10 @@ describe('ProfilesService', () => {
 
     it('should create a new profile when user has no profile', async () => {
       const userWithoutProfile = { ...mockUser, profile: null };
-      userRepository.findOne.mockResolvedValue(userWithoutProfile);
+      usersService.findByIdWithProfile.mockResolvedValue(userWithoutProfile as any);
       profileRepository.create.mockReturnValue(mockProfile);
       profileRepository.save.mockResolvedValue(mockProfile);
-      userRepository.save.mockResolvedValue({
-        ...userWithoutProfile,
-        profile: mockProfile,
-      });
+      usersService.linkProfile.mockResolvedValue(undefined);
 
       const result = await service.createOrUpdateForUser(userId, profileDto);
 
@@ -284,7 +282,7 @@ describe('ProfilesService', () => {
 
     it('should update existing profile when user has profile', async () => {
       const updatedProfile = { ...mockProfile, height: 185 };
-      userRepository.findOne.mockResolvedValue(mockUser);
+      usersService.findByIdWithProfile.mockResolvedValue(mockUser as any);
       profileRepository.update.mockResolvedValue({ affected: 1 } as any);
       profileRepository.findOne.mockResolvedValue(updatedProfile);
 
@@ -298,7 +296,7 @@ describe('ProfilesService', () => {
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.findByIdWithProfile.mockResolvedValue(null);
 
       await expect(
         service.createOrUpdateForUser(userId, profileDto),
@@ -306,7 +304,7 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on error', async () => {
-      userRepository.findOne.mockRejectedValue(new Error('Database error'));
+      usersService.findByIdWithProfile.mockRejectedValue(new Error('Database error'));
 
       await expect(
         service.createOrUpdateForUser(userId, profileDto),
@@ -318,19 +316,16 @@ describe('ProfilesService', () => {
     const userId = '123e4567-e89b-12d3-a456-426614174001';
 
     it('should return user profile', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      usersService.findByIdWithProfile.mockResolvedValue(mockUser as any);
 
       const result = await service.getProfileForUser(userId);
 
       expect(result).toEqual(mockProfile);
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: userId },
-        relations: ['profile'],
-      });
+      expect(usersService.findByIdWithProfile).toHaveBeenCalledWith(userId);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.findByIdWithProfile.mockResolvedValue(null);
 
       await expect(service.getProfileForUser(userId)).rejects.toThrow(
         NotFoundException,
@@ -339,7 +334,7 @@ describe('ProfilesService', () => {
 
     it('should throw NotFoundException when user has no profile', async () => {
       const userWithoutProfile = { ...mockUser, profile: null };
-      userRepository.findOne.mockResolvedValue(userWithoutProfile);
+      usersService.findByIdWithProfile.mockResolvedValue(userWithoutProfile as any);
 
       await expect(service.getProfileForUser(userId)).rejects.toThrow(
         NotFoundException,
@@ -347,7 +342,7 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on database error', async () => {
-      userRepository.findOne.mockRejectedValue(new Error('Database error'));
+      usersService.findByIdWithProfile.mockRejectedValue(new Error('Database error'));
 
       await expect(service.getProfileForUser(userId)).rejects.toThrow(
         InternalServerErrorException,
@@ -363,19 +358,16 @@ describe('ProfilesService', () => {
         ...mockUser,
         stateArchive: { egn: '9001011234' },
       };
-      userRepository.findOne.mockResolvedValue(userWithEgn);
+      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(userWithEgn as any);
 
       const result = await service.getProfileByEgn(egn);
 
       expect(result).toEqual(mockProfile);
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { stateArchive: { egn } },
-        relations: ['profile', 'stateArchive'],
-      });
+      expect(usersService.findByEgnWithProfileAndStateArchive).toHaveBeenCalledWith(egn);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(null);
 
       await expect(service.getProfileByEgn(egn)).rejects.toThrow(
         NotFoundException,
@@ -388,7 +380,7 @@ describe('ProfilesService', () => {
         profile: null,
         stateArchive: { egn },
       };
-      userRepository.findOne.mockResolvedValue(userWithoutProfile);
+      usersService.findByEgnWithProfileAndStateArchive.mockResolvedValue(userWithoutProfile as any);
 
       await expect(service.getProfileByEgn(egn)).rejects.toThrow(
         NotFoundException,
@@ -396,7 +388,7 @@ describe('ProfilesService', () => {
     });
 
     it('should throw InternalServerErrorException on database error', async () => {
-      userRepository.findOne.mockRejectedValue(new Error('Database error'));
+      usersService.findByEgnWithProfileAndStateArchive.mockRejectedValue(new Error('Database error'));
 
       await expect(service.getProfileByEgn(egn)).rejects.toThrow(
         InternalServerErrorException,

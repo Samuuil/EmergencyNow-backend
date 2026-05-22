@@ -297,12 +297,10 @@ describe('UsersService', () => {
       );
     });
 
-    it('should throw InternalServerErrorException on database error', async () => {
+    it('should throw raw error on database error', async () => {
       repository.findOne.mockRejectedValue(new Error('Database error'));
 
-      await expect(service.findUserRole(userId)).rejects.toThrow(
-        InternalServerErrorException,
-      );
+      await expect(service.findUserRole(userId)).rejects.toThrow('Database error');
     });
   });
 

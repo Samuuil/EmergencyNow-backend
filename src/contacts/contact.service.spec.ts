@@ -4,7 +4,7 @@ import { ContactsService } from './contact.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Contact } from './entities/contact.entity';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 import {
   NotFoundException,
   BadRequestException,
@@ -17,7 +17,7 @@ jest.mock('nestjs-paginate');
 describe('ContactsService', () => {
   let service: ContactsService;
   let contactsRepository: jest.Mocked<Repository<Contact>>;
-  let userRepository: jest.Mocked<Repository<User>>;
+  let usersService: jest.Mocked<UsersService>;
 
   const mockContact: Contact = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -26,13 +26,8 @@ describe('ContactsService', () => {
     email: 'john@example.com',
     user: {
       id: '123e4567-e89b-12d3-a456-426614174001',
-    } as User,
+    } as any,
   };
-
-  const mockUser: User = {
-    id: '123e4567-e89b-12d3-a456-426614174001',
-    contacts: [mockContact],
-  } as User;
 
   const mockContactsRepository = {
     create: jest.fn(),
@@ -40,11 +35,11 @@ describe('ContactsService', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     remove: jest.fn(),
+    count: jest.fn(),
   };
 
-  const mockUserRepository = {
-    findOne: jest.fn(),
-    save: jest.fn(),
+  const mockUsersService = {
+    exists: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -56,8 +51,8 @@ describe('ContactsService', () => {
           useValue: mockContactsRepository,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
+          provide: UsersService,
+          useValue: mockUsersService,
         },
         {
           provide: ConfigService,
@@ -68,7 +63,7 @@ describe('ContactsService', () => {
 
     service = module.get<ContactsService>(ContactsService);
     contactsRepository = module.get(getRepositoryToken(Contact));
-    userRepository = module.get(getRepositoryToken(User));
+    usersService = module.get(UsersService);
 
     jest.clearAllMocks();
   });
@@ -290,8 +285,8 @@ describe('ContactsService', () => {
     };
 
     it('should create a contact for user', async () => {
-      const userWithContacts = { ...mockUser, contacts: [] };
-      userRepository.findOne.mockResolvedValue(userWithContacts);
+      usersService.exists.mockResolvedValue(true);
+      contactsRepository.count.mockResolvedValue(0);
       contactsRepository.create.mockReturnValue(mockContact);
       contactsRepository.save.mockResolvedValue(mockContact);
 
@@ -299,13 +294,13 @@ describe('ContactsService', () => {
 
       expect(contactsRepository.create).toHaveBeenCalledWith({
         ...createContactDto,
-        user: userWithContacts,
+        user: { id: userId },
       });
       expect(contactsRepository.save).toHaveBeenCalledWith(mockContact);
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.exists.mockResolvedValue(false);
 
       await expect(
         service.createContactForUser(userId, createContactDto),
@@ -313,11 +308,8 @@ describe('ContactsService', () => {
     });
 
     it('should throw BadRequestException when max contacts reached', async () => {
-      const userWithMaxContacts = {
-        ...mockUser,
-        contacts: new Array(5).fill(mockContact),
-      };
-      userRepository.findOne.mockResolvedValue(userWithMaxContacts);
+      usersService.exists.mockResolvedValue(true);
+      contactsRepository.count.mockResolvedValue(5);
 
       await expect(
         service.createContactForUser(userId, createContactDto),
@@ -325,7 +317,7 @@ describe('ContactsService', () => {
     });
 
     it('should throw InternalServerErrorException on error', async () => {
-      userRepository.findOne.mockRejectedValue(new Error('Database error'));
+      usersService.exists.mockRejectedValue(new Error('Database error'));
 
       await expect(
         service.createContactForUser(userId, createContactDto),

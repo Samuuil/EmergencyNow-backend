@@ -227,18 +227,19 @@ export class StateArchiveService {
 
         try {
           archive = await this.archiveRepo.save(archive);
-          this.logger.log(
-            `Saved state archive data for phone: ${phoneNumber}`,
-          );
+          this.logger.log(`Saved state archive data for phone: ${phoneNumber}`);
         } catch (saveError) {
           if (
             saveError instanceof QueryFailedError &&
-            (saveError as any).code === PG_UNIQUE_VIOLATION
+            (saveError as QueryFailedError & { code: string }).code ===
+              PG_UNIQUE_VIOLATION
           ) {
             this.logger.warn(
               `Concurrent insert for phone ${phoneNumber}; re-fetching existing record`,
             );
-            archive = await this.archiveRepo.findOne({ where: { phoneNumber } });
+            archive = await this.archiveRepo.findOne({
+              where: { phoneNumber },
+            });
             if (!archive) throw saveError;
           } else {
             throw saveError;
@@ -253,9 +254,7 @@ export class StateArchiveService {
           stack?: string;
         };
         if (err.response?.status === 404) {
-          this.logger.warn(
-            `State archive not found for phone: ${phoneNumber}`,
-          );
+          this.logger.warn(`State archive not found for phone: ${phoneNumber}`);
           return null;
         }
         this.logger.error(
@@ -400,7 +399,8 @@ export class StateArchiveService {
         } catch (saveError) {
           if (
             saveError instanceof QueryFailedError &&
-            (saveError as any).code === PG_UNIQUE_VIOLATION
+            (saveError as QueryFailedError & { code: string }).code ===
+              PG_UNIQUE_VIOLATION
           ) {
             this.logger.warn(
               `Concurrent insert for EGN ${egn}; re-fetching existing record`,

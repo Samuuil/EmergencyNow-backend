@@ -67,11 +67,7 @@ export class RedisService implements OnModuleDestroy {
   async storeRefreshJti(userId: string, jti: string): Promise<void> {
     await Promise.all([
       this.client.setex(`refresh:jti:${jti}`, this.refreshTtlSeconds, userId),
-      this.client.setex(
-        `refresh:user:${userId}`,
-        this.refreshTtlSeconds,
-        jti,
-      ),
+      this.client.setex(`refresh:user:${userId}`, this.refreshTtlSeconds, jti),
     ]);
   }
 
