@@ -125,7 +125,9 @@ describe('VerificationCodeService', () => {
         method: 'email',
         egn: '1234567890',
       });
-      expect(redisService.getdel).toHaveBeenCalledWith('verify:email:1234567890');
+      expect(redisService.getdel).toHaveBeenCalledWith(
+        'verify:email:1234567890',
+      );
     });
 
     it('should verify and consume SMS verification code', async () => {

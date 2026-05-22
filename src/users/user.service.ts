@@ -163,7 +163,8 @@ export class UsersService {
     } catch (error) {
       if (
         error instanceof QueryFailedError &&
-        (error as any).code === PG_UNIQUE_VIOLATION
+        (error as QueryFailedError & { code: string }).code ===
+          PG_UNIQUE_VIOLATION
       ) {
         const existing = await this.usersRepository.findOne({
           where: { stateArchive: { id: stateArchiveId } },

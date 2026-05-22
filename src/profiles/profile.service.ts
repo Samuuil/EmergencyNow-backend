@@ -211,7 +211,8 @@ export class ProfilesService {
 
   async getProfileByEgn(egn: string): Promise<Profile> {
     try {
-      const user = await this.usersService.findByEgnWithProfileAndStateArchive(egn);
+      const user =
+        await this.usersService.findByEgnWithProfileAndStateArchive(egn);
 
       if (!user) {
         throw new NotFoundException({

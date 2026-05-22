@@ -185,13 +185,19 @@ describe('DriverGateway', () => {
       } as any;
 
       gateway.handleConnection(client);
-      await gateway.onDriverRespond(client, { callId: 'call-123', accept: true });
-
-      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith('driver.responded', {
+      await gateway.onDriverRespond(client, {
         callId: 'call-123',
-        driverId: 'driver-123',
         accept: true,
       });
+
+      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+        'driver.responded',
+        {
+          callId: 'call-123',
+          driverId: 'driver-123',
+          accept: true,
+        },
+      );
     });
 
     it('should emit driver.responded event when driver rejects', async () => {
@@ -206,13 +212,19 @@ describe('DriverGateway', () => {
       } as any;
 
       gateway.handleConnection(client);
-      await gateway.onDriverRespond(client, { callId: 'call-456', accept: false });
-
-      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith('driver.responded', {
+      await gateway.onDriverRespond(client, {
         callId: 'call-456',
-        driverId: 'driver-456',
         accept: false,
       });
+
+      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+        'driver.responded',
+        {
+          callId: 'call-456',
+          driverId: 'driver-456',
+          accept: false,
+        },
+      );
     });
   });
 
@@ -238,7 +250,12 @@ describe('DriverGateway', () => {
 
       expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
         'driver.location.updated',
-        { callId: 'call-123', latitude: 42.7, longitude: 23.3, driverId: 'driver-123' },
+        {
+          callId: 'call-123',
+          latitude: 42.7,
+          longitude: 23.3,
+          driverId: 'driver-123',
+        },
       );
     });
   });
@@ -378,7 +395,9 @@ describe('DriverGateway', () => {
       gateway.handleConnection(client);
 
       const driverMap = new Map([['driver-123', 'amb-123']]);
-      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
+        driverMap,
+      );
       ambulancesService.updateLocation.mockResolvedValue({} as any);
 
       await gateway.refreshAvailableAmbulanceLocations();
@@ -404,7 +423,9 @@ describe('DriverGateway', () => {
       gateway.handleConnection(client);
 
       const driverMap = new Map([['driver-123', 'amb-123']]);
-      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
+        driverMap,
+      );
       ambulancesService.updateLocation.mockResolvedValue({} as any);
 
       await gateway.refreshAvailableAmbulanceLocations();
@@ -484,7 +505,9 @@ describe('DriverGateway', () => {
       gateway.handleConnection(client);
 
       const driverMap = new Map([['driver-123', 'amb-123']]);
-      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(driverMap);
+      ambulancesService.getDriverIdToAmbulanceIdMap.mockResolvedValue(
+        driverMap,
+      );
       ambulancesService.updateLocation.mockResolvedValue({} as any);
 
       await gateway.refreshAvailableAmbulanceLocations();

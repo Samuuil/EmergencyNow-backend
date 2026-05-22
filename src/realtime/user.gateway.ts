@@ -51,7 +51,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
         role: payload.role,
       };
 
-      client.join(payload.sub);
+      void client.join(payload.sub);
       this.onlineUsers.add(payload.sub);
       this.logger.log(
         `User ${payload.sub} connected to /users namespace (socket ${client.id})`,
@@ -134,10 +134,7 @@ export class UserGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(userId, 'call.awaiting-dispatcher', payload);
   }
 
-  notifyCallWithDispatcher(
-    userId: string,
-    payload: { callId: string },
-  ) {
+  notifyCallWithDispatcher(userId: string, payload: { callId: string }) {
     this.emitToUser(userId, 'call.with-dispatcher', payload);
   }
 

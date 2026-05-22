@@ -92,10 +92,7 @@ export class CallsController {
   @Post(':id/hospitals')
   @Roles(Role.ADMIN, Role.DRIVER)
   @ApiOperation({ summary: 'Get nearby hospitals for call' })
-  getHospitalsForCall(
-    @Param('id') id: string,
-    @Body() body: LocationBodyDto,
-  ) {
+  getHospitalsForCall(@Param('id') id: string, @Body() body: LocationBodyDto) {
     return this.callsService.getHospitalsForCall(
       id,
       body.latitude,
@@ -106,10 +103,7 @@ export class CallsController {
   @Post(':id/select-hospital')
   @Roles(Role.ADMIN, Role.DRIVER)
   @ApiOperation({ summary: 'Select hospital for call' })
-  selectHospital(
-    @Param('id') id: string,
-    @Body() body: SelectHospitalBodyDto,
-  ) {
+  selectHospital(@Param('id') id: string, @Body() body: SelectHospitalBodyDto) {
     return this.callsService.selectHospitalForCall(
       id,
       body.hospitalId,

@@ -276,7 +276,6 @@ describe('CallsController', () => {
     });
   });
 
-
   describe('updateAmbulanceLocation', () => {
     const callId = 'call-123';
     const body = { latitude: 42.7, longitude: 23.3 };

@@ -195,7 +195,7 @@ export class ContactsService {
 
       const contact = this.contactsRepository.create({
         ...dto,
-        user: { id: userId } as any,
+        user: { id: userId } as { id: string },
       });
 
       const savedContact = await this.contactsRepository.save(contact);
