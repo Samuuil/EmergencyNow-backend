@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StateArchive } from '../state-archive/entities/state-archive.entity';
@@ -8,6 +9,7 @@ export class StateArchiveSeederService {
   constructor(
     @InjectRepository(StateArchive)
     private readonly stateArchiveRepository: Repository<StateArchive>,
+    private readonly configService: ConfigService,
   ) {}
 
   async seed(): Promise<StateArchive[]> {
@@ -15,26 +17,50 @@ export class StateArchiveSeederService {
       {
         egn: '1111111111',
         fullName: 'Boris Borisov',
-        email: process.env.SEED_USER1_EMAIL || 'boris.borisov@example.com',
-        phoneNumber: process.env.SEED_USER1_PHONE || '+359888111111',
+        email: this.configService.get<string>(
+          'SEED_USER1_EMAIL',
+          'boris.borisov@example.com',
+        ),
+        phoneNumber: this.configService.get<string>(
+          'SEED_USER1_PHONE',
+          '+359888111111',
+        ),
       },
       {
         egn: '2222222222',
         fullName: 'Stanislav Todorov',
-        email: process.env.SEED_USER2_EMAIL || 'stanislav.trifonov@example.com',
-        phoneNumber: process.env.SEED_USER2_PHONE || '+359888222222',
+        email: this.configService.get<string>(
+          'SEED_USER2_EMAIL',
+          'stanislav.trifonov@example.com',
+        ),
+        phoneNumber: this.configService.get<string>(
+          'SEED_USER2_PHONE',
+          '+359888222222',
+        ),
       },
       {
         egn: '3333333333',
         fullName: 'Preslav Ivanov',
-        email: process.env.SEED_USER3_EMAIL || 'preslav.ivanov@example.com',
-        phoneNumber: process.env.SEED_USER3_PHONE || '+359888333333',
+        email: this.configService.get<string>(
+          'SEED_USER3_EMAIL',
+          'preslav.ivanov@example.com',
+        ),
+        phoneNumber: this.configService.get<string>(
+          'SEED_USER3_PHONE',
+          '+359888333333',
+        ),
       },
       {
         egn: '4444444444',
         fullName: 'Dimitar Petrov',
-        email: process.env.SEED_USER4_EMAIL || 'dimitar.petrov@example.com',
-        phoneNumber: process.env.SEED_USER4_PHONE || '+359888333333',
+        email: this.configService.get<string>(
+          'SEED_USER4_EMAIL',
+          'dimitar.petrov@example.com',
+        ),
+        phoneNumber: this.configService.get<string>(
+          'SEED_USER4_PHONE',
+          '+359888333333',
+        ),
       },
     ];
 

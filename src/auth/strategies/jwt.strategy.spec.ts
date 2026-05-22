@@ -47,7 +47,6 @@ describe('JwtStrategy', () => {
 
       expect(result).toEqual({
         id: 'user-123',
-        egn: '1234567890',
         role: Role.USER,
       });
     });
@@ -63,7 +62,6 @@ describe('JwtStrategy', () => {
 
       expect(result).toEqual({
         id: 'admin-123',
-        egn: '9876543210',
         role: Role.ADMIN,
       });
     });
@@ -79,7 +77,6 @@ describe('JwtStrategy', () => {
 
       expect(result).toEqual({
         id: 'driver-123',
-        egn: '1122334455',
         role: Role.DRIVER,
       });
     });
@@ -95,7 +92,6 @@ describe('JwtStrategy', () => {
 
       expect(result).toEqual({
         id: 'doctor-123',
-        egn: '5544332211',
         role: Role.DOCTOR,
       });
     });
@@ -111,7 +107,6 @@ describe('JwtStrategy', () => {
 
       expect(result).toEqual({
         id: 'user-456',
-        egn: '0987654321',
         role: Role.USER,
       });
     });
@@ -122,23 +117,22 @@ describe('JwtStrategy', () => {
       expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
     });
 
-    it('should use default secret when JWT_SECRET is not configured', () => {
+    it('should throw when JWT_SECRET is not configured', async () => {
       const mockConfigNoSecret = {
         get: jest.fn().mockReturnValue(undefined),
       };
 
-      const module = Test.createTestingModule({
-        providers: [
-          JwtStrategy,
-          {
-            provide: ConfigService,
-            useValue: mockConfigNoSecret,
-          },
-        ],
-      });
-
-      // The strategy should initialize without throwing
-      expect(() => module.compile()).not.toThrow();
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            JwtStrategy,
+            {
+              provide: ConfigService,
+              useValue: mockConfigNoSecret,
+            },
+          ],
+        }).compile(),
+      ).rejects.toThrow('JWT_SECRET must be configured');
     });
   });
 });

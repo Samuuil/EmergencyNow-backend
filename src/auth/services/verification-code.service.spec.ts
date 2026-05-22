@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { VerificationCodeService } from './verification-code.service';
 import { RedisService } from '../../common/redis/redis.service';
 
@@ -23,6 +24,10 @@ describe('VerificationCodeService', () => {
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((_key: string, def?: unknown) => def) },
         },
       ],
     }).compile();
@@ -120,7 +125,9 @@ describe('VerificationCodeService', () => {
         method: 'email',
         egn: '1234567890',
       });
-      expect(redisService.getdel).toHaveBeenCalledWith('verify:email:1234567890');
+      expect(redisService.getdel).toHaveBeenCalledWith(
+        'verify:email:1234567890',
+      );
     });
 
     it('should verify and consume SMS verification code', async () => {

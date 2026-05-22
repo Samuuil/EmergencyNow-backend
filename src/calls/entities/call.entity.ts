@@ -4,6 +4,8 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Ambulance } from '../../ambulances/entities/ambulance.entity';
@@ -30,9 +32,25 @@ export class Call {
   @Column()
   userEgn: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  patientEgn: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  patientPhoneNumber: string | null;
+
   @ManyToOne(() => Ambulance, { nullable: true })
   @JoinColumn()
   ambulance: Ambulance;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assignedDispatcherId' })
+  assignedDispatcher: User | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  assignedDispatcherId: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  dispatcherAssignedAt: Date | null;
 
   @Column({
     type: 'enum',
@@ -74,8 +92,11 @@ export class Call {
   @Column({ type: 'timestamp', nullable: true })
   completedAt: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 
   @Column({ nullable: true })
   selectedHospitalId: string;

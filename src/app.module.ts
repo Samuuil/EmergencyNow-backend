@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RedisModule } from './common/redis/redis.module';
 import { AuthModule } from './auth/auth.module';
@@ -17,12 +18,23 @@ import { ContactsModule } from './contacts/contact.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SeedingModule } from './seeding/seeding.module';
+import { DispatchersModule } from './dispatchers/dispatcher.module';
+import { PushTokensModule } from './push-tokens/push-tokens.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: parseInt(config.get<string>('THROTTLE_TTL', '60000'), 10),
+          limit: parseInt(config.get<string>('THROTTLE_LIMIT', '1000'), 10),
+        },
+      ],
+    }),
     EventEmitterModule.forRoot(),
     RedisModule,
     TypeOrmModule.forRootAsync({
@@ -49,8 +61,11 @@ import { SeedingModule } from './seeding/seeding.module';
     HospitalsModule,
     RealtimeModule,
     SeedingModule,
+    DispatchersModule,
+    PushTokensModule,
+    NotificationModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

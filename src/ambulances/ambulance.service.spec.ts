@@ -7,9 +7,10 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AmbulancesService } from './ambulance.service';
 import { Ambulance } from './entities/ambulance.entity';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/user.service';
 import { GoogleMapsService } from '../common/services/google-maps.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
@@ -19,8 +20,7 @@ jest.mock('nestjs-paginate');
 describe('AmbulancesService', () => {
   let service: AmbulancesService;
   let ambulanceRepository: jest.Mocked<Repository<Ambulance>>;
-  let userRepository: jest.Mocked<Repository<User>>;
-  let googleMapsService: jest.Mocked<GoogleMapsService>;
+  let usersService: jest.Mocked<UsersService>;
 
   const mockAmbulance: Ambulance = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -35,15 +35,6 @@ describe('AmbulancesService', () => {
     updatedAt: new Date(),
   };
 
-  const mockUser: User = {
-    id: 'user-123',
-    role: 'DRIVER' as any,
-    profile: null as any,
-    contacts: [],
-    calls: [],
-    stateArchive: { id: 'archive-1' } as any,
-  };
-
   const mockAmbulanceRepository = {
     create: jest.fn(),
     save: jest.fn(),
@@ -54,8 +45,13 @@ describe('AmbulancesService', () => {
     createQueryBuilder: jest.fn(),
   };
 
-  const mockUserRepository = {
-    findOne: jest.fn(),
+  const mockUsersService = {
+    exists: jest.fn(),
+  };
+
+  const mockEventEmitter = {
+    emitAsync: jest.fn().mockResolvedValue([]),
+    emit: jest.fn(),
   };
 
   const mockGoogleMapsService = {
@@ -74,8 +70,12 @@ describe('AmbulancesService', () => {
           useValue: mockAmbulanceRepository,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
+          provide: UsersService,
+          useValue: mockUsersService,
+        },
+        {
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
         },
         {
           provide: GoogleMapsService,
@@ -86,8 +86,7 @@ describe('AmbulancesService', () => {
 
     service = module.get<AmbulancesService>(AmbulancesService);
     ambulanceRepository = module.get(getRepositoryToken(Ambulance));
-    userRepository = module.get(getRepositoryToken(User));
-    googleMapsService = module.get(GoogleMapsService);
+    usersService = module.get(UsersService);
 
     jest.clearAllMocks();
   });
@@ -124,7 +123,7 @@ describe('AmbulancesService', () => {
     it('should create an ambulance with driver', async () => {
       const driverId = 'user-123';
       ambulanceRepository.findOne.mockResolvedValue(null);
-      userRepository.findOne.mockResolvedValue(mockUser);
+      usersService.exists.mockResolvedValue(true);
       ambulanceRepository.create.mockReturnValue({
         ...mockAmbulance,
         driverId,
@@ -137,9 +136,7 @@ describe('AmbulancesService', () => {
       const result = await service.create(createAmbulanceDto, driverId);
 
       expect(result.driverId).toBe(driverId);
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: driverId },
-      });
+      expect(usersService.exists).toHaveBeenCalledWith(driverId);
     });
 
     it('should throw ConflictException if ambulance already exists', async () => {
@@ -153,7 +150,7 @@ describe('AmbulancesService', () => {
     it('should throw NotFoundException if driver not found', async () => {
       const driverId = 'invalid-driver-id';
       ambulanceRepository.findOne.mockResolvedValue(null);
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.exists.mockResolvedValue(false);
 
       await expect(
         service.create(createAmbulanceDto, driverId),
@@ -237,7 +234,7 @@ describe('AmbulancesService', () => {
     it('should throw NotFoundException when driver not found', async () => {
       const updateDto = { driverId: 'invalid-driver-id' };
       ambulanceRepository.findOne.mockResolvedValue(mockAmbulance);
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.exists.mockResolvedValue(false);
 
       await expect(service.update(ambulanceId, updateDto)).rejects.toThrow(
         NotFoundException,
@@ -303,61 +300,6 @@ describe('AmbulancesService', () => {
       await expect(service.findAvailableList()).rejects.toThrow(
         InternalServerErrorException,
       );
-    });
-  });
-
-  describe('findNearestAvailableAmbulanceExcluding', () => {
-    const location = { latitude: 42.7, longitude: 23.3 };
-
-    it('should find nearest ambulance excluding specified IDs', async () => {
-      const ambulances = [
-        { ...mockAmbulance, id: 'amb-1', latitude: 42.69, longitude: 23.32 },
-        { ...mockAmbulance, id: 'amb-2', latitude: 42.8, longitude: 23.5 },
-        { ...mockAmbulance, id: 'amb-3', latitude: 42.71, longitude: 23.33 },
-      ];
-      ambulanceRepository.find.mockResolvedValue(ambulances);
-      googleMapsService.getDistancesToMultipleDestinations.mockResolvedValue([
-        { distance: 5000, duration: 600 },
-        { distance: 2500, duration: 250 },
-      ]);
-
-      const result = await service.findNearestAvailableAmbulanceExcluding(
-        location,
-        ['amb-1'],
-      );
-
-      expect(result).toBeDefined();
-      expect(result!.id).toBe('amb-3');
-      expect(result!.distance).toBe(2500);
-      expect(result!.duration).toBe(250);
-    });
-
-    it('should return null when all ambulances are excluded', async () => {
-      const ambulances = [
-        { ...mockAmbulance, id: 'amb-1', latitude: 42.69, longitude: 23.32 },
-      ];
-      ambulanceRepository.find.mockResolvedValue(ambulances);
-
-      const result = await service.findNearestAvailableAmbulanceExcluding(
-        location,
-        ['amb-1'],
-      );
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when no ambulances with location data', async () => {
-      const ambulances = [
-        { ...mockAmbulance, id: 'amb-1', latitude: null, longitude: null },
-      ] as any;
-      ambulanceRepository.find.mockResolvedValue(ambulances);
-
-      const result = await service.findNearestAvailableAmbulanceExcluding(
-        location,
-        [],
-      );
-
-      expect(result).toBeNull();
     });
   });
 
@@ -438,7 +380,7 @@ describe('AmbulancesService', () => {
       ambulanceRepository.findOne
         .mockResolvedValueOnce(mockAmbulance)
         .mockResolvedValueOnce(null);
-      userRepository.findOne.mockResolvedValue(mockUser);
+      usersService.exists.mockResolvedValue(true);
       ambulanceRepository.save.mockResolvedValue({
         ...mockAmbulance,
         driverId,
@@ -452,7 +394,7 @@ describe('AmbulancesService', () => {
 
     it('should throw NotFoundException when driver not found', async () => {
       ambulanceRepository.findOne.mockResolvedValue(mockAmbulance);
-      userRepository.findOne.mockResolvedValue(null);
+      usersService.exists.mockResolvedValue(false);
 
       await expect(service.assignDriver(ambulanceId, driverId)).rejects.toThrow(
         NotFoundException,
@@ -464,7 +406,7 @@ describe('AmbulancesService', () => {
       ambulanceRepository.findOne
         .mockResolvedValueOnce(mockAmbulance)
         .mockResolvedValueOnce(otherAmbulance);
-      userRepository.findOne.mockResolvedValue(mockUser);
+      usersService.exists.mockResolvedValue(true);
 
       await expect(service.assignDriver(ambulanceId, driverId)).rejects.toThrow(
         BadRequestException,
@@ -473,7 +415,7 @@ describe('AmbulancesService', () => {
 
     it('should throw InternalServerErrorException on database error', async () => {
       ambulanceRepository.findOne.mockResolvedValueOnce(mockAmbulance);
-      userRepository.findOne.mockRejectedValue(new Error('Database error'));
+      usersService.exists.mockRejectedValue(new Error('Database error'));
 
       await expect(service.assignDriver(ambulanceId, driverId)).rejects.toThrow(
         InternalServerErrorException,
@@ -532,26 +474,6 @@ describe('AmbulancesService', () => {
     });
   });
 
-  describe('bulkUpdateLocations', () => {
-    it('should update multiple ambulance locations', async () => {
-      const updates = [
-        { ambulanceId: 'amb-1', latitude: 42.7, longitude: 23.3 },
-        { ambulanceId: 'amb-2', latitude: 42.8, longitude: 23.4 },
-      ];
-      ambulanceRepository.update.mockResolvedValue({ affected: 1 } as any);
-
-      await service.bulkUpdateLocations(updates);
-
-      expect(ambulanceRepository.update).toHaveBeenCalledTimes(2);
-    });
-
-    it('should handle empty updates array', async () => {
-      await service.bulkUpdateLocations([]);
-
-      expect(ambulanceRepository.update).not.toHaveBeenCalled();
-    });
-  });
-
   describe('removeInactiveDrivers', () => {
     it('should remove inactive drivers from ambulances', async () => {
       const inactiveAmbulances = [
@@ -577,14 +499,14 @@ describe('AmbulancesService', () => {
       ambulanceRepository.createQueryBuilder.mockReturnValue(
         queryBuilder as any,
       );
-      ambulanceRepository.save.mockResolvedValue(mockAmbulance);
+      ambulanceRepository.update.mockResolvedValue({ affected: 2 } as any);
 
       const result = await service.removeInactiveDrivers(5);
 
       expect(result).toHaveLength(2);
       expect(result).toContain('driver-1');
       expect(result).toContain('driver-2');
-      expect(ambulanceRepository.save).toHaveBeenCalledTimes(2);
+      expect(ambulanceRepository.update).toHaveBeenCalledTimes(1);
     });
   });
 

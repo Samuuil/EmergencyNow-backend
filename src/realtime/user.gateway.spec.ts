@@ -56,6 +56,7 @@ describe('UserGateway', () => {
         id: 'socket-123',
         handshake,
         disconnect: jest.fn(),
+        join: jest.fn(),
       }) as any;
 
     it('should connect user with valid token from header', () => {
@@ -152,15 +153,8 @@ describe('UserGateway', () => {
       expect(client.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('should use default secret when JWT_SECRET is not configured', () => {
-      const mockPayload = {
-        sub: 'user-123',
-        role: 'USER',
-        egn: '1234567890',
-      };
-
+    it('should disconnect when JWT_SECRET is not configured', () => {
       configService.get.mockReturnValue(undefined);
-      jwtService.verify.mockReturnValue(mockPayload);
 
       const client = createMockClient({
         headers: {
@@ -170,9 +164,7 @@ describe('UserGateway', () => {
 
       gateway.handleConnection(client);
 
-      expect(jwtService.verify).toHaveBeenCalledWith('valid-token', {
-        secret: 'defaultSecret',
-      });
+      expect(client.disconnect).toHaveBeenCalledWith(true);
     });
   });
 
@@ -193,6 +185,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -229,6 +222,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -247,11 +241,11 @@ describe('UserGateway', () => {
 
       gateway.notifyCallDispatched('user-123', payload);
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('user-123');
       expect(mockServer.emit).toHaveBeenCalledWith('call.dispatched', payload);
     });
 
-    it('should not emit when user is offline', () => {
+    it('should emit to user room even when user is offline', () => {
       const payload = {
         callId: 'call-123',
         ambulanceId: 'amb-123',
@@ -266,7 +260,7 @@ describe('UserGateway', () => {
 
       gateway.notifyCallDispatched('offline-user', payload);
 
-      expect(mockServer.to).not.toHaveBeenCalled();
+      expect(mockServer.to).toHaveBeenCalledWith('offline-user');
     });
   });
 
@@ -287,6 +281,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -304,7 +299,7 @@ describe('UserGateway', () => {
 
       gateway.notifyLocationUpdate('user-123', payload);
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('user-123');
       expect(mockServer.emit).toHaveBeenCalledWith(
         'ambulance.location',
         payload,
@@ -327,6 +322,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -345,7 +341,7 @@ describe('UserGateway', () => {
       );
     });
 
-    it('should not emit when user is offline', () => {
+    it('should emit to user room even when user is offline', () => {
       const payload = {
         callId: 'call-123',
         ambulanceLocation: { latitude: 42.75, longitude: 23.35 },
@@ -354,7 +350,7 @@ describe('UserGateway', () => {
 
       gateway.notifyLocationUpdate('offline-user', payload);
 
-      expect(mockServer.to).not.toHaveBeenCalled();
+      expect(mockServer.to).toHaveBeenCalledWith('offline-user');
     });
   });
 
@@ -375,6 +371,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -386,11 +383,11 @@ describe('UserGateway', () => {
 
       gateway.notifyStatusChange('user-123', payload);
 
-      expect(mockServer.to).toHaveBeenCalledWith('socket-123');
+      expect(mockServer.to).toHaveBeenCalledWith('user-123');
       expect(mockServer.emit).toHaveBeenCalledWith('call.status', payload);
     });
 
-    it('should not emit when user is offline', () => {
+    it('should emit to user room even when user is offline', () => {
       const payload = {
         callId: 'call-123',
         status: 'COMPLETED',
@@ -398,7 +395,7 @@ describe('UserGateway', () => {
 
       gateway.notifyStatusChange('offline-user', payload);
 
-      expect(mockServer.to).not.toHaveBeenCalled();
+      expect(mockServer.to).toHaveBeenCalledWith('offline-user');
     });
   });
 
@@ -419,6 +416,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer valid-token' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client);
@@ -446,6 +444,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer token-1' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client1);
@@ -458,6 +457,7 @@ describe('UserGateway', () => {
           headers: { authorization: 'Bearer token-2' },
         },
         disconnect: jest.fn(),
+        join: jest.fn(),
       } as any;
 
       gateway.handleConnection(client2);

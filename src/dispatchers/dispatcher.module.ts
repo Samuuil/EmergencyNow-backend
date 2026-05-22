@@ -1,0 +1,27 @@
+import { Module, forwardRef } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Call } from '../calls/entities/call.entity';
+import { StateArchive } from '../state-archive/entities/state-archive.entity';
+import { DispatcherService } from './dispatcher.service';
+import { DispatcherController } from './dispatcher.controller';
+import { AmbulancesModule } from '../ambulances/ambulance.module';
+import { RealtimeModule } from '../realtime/realtime.module';
+import { AuthModule } from '../auth/auth.module';
+import { GoogleMapsService } from '../common/services/google-maps.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { NotificationModule } from '../notification/notification.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Call, StateArchive]),
+    AmbulancesModule,
+    forwardRef(() => RealtimeModule),
+    AuthModule,
+    NotificationModule,
+  ],
+  controllers: [DispatcherController],
+  providers: [DispatcherService, GoogleMapsService, JwtAuthGuard, RolesGuard],
+  exports: [DispatcherService],
+})
+export class DispatchersModule {}

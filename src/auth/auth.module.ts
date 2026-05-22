@@ -25,7 +25,12 @@ import { VerificationCodeService } from './services/verification-code.service';
       useFactory: (config: ConfigService) => {
         const secret = config.get<string>('JWT_SECRET');
         if (!secret) throw new Error('JWT_SECRET must be configured');
-        return { secret, signOptions: { expiresIn: '1d' } };
+        return {
+          secret,
+          signOptions: {
+            expiresIn: config.get<string>('JWT_ACCESS_EXPIRES_IN', '1d'),
+          },
+        };
       },
     }),
   ],

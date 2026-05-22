@@ -6,27 +6,18 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Ambulance } from './entities/ambulance.entity';
-import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/user.service';
-import {
-  GoogleMapsService,
-  Location,
-} from '../common/services/google-maps.service';
 import { CreateAmbulanceDto } from './dtos/createAmbulance.dto';
 import { UpdateAmbulanceDto } from './dtos/updateAmbulance.dto';
 import {
   AmbulanceErrorCode,
   AmbulanceErrorMessages,
 } from './errors/ambulance-errors.enum';
-
-export interface AmbulanceWithDistance extends Ambulance {
-  distance: number;
-  duration: number;
-}
 
 @Injectable()
 export class AmbulancesService {
@@ -36,7 +27,7 @@ export class AmbulancesService {
     @InjectRepository(Ambulance)
     private readonly ambulanceRepository: Repository<Ambulance>,
     private readonly usersService: UsersService,
-    private readonly googleMapsService: GoogleMapsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(dto: CreateAmbulanceDto, driverId?: string): Promise<Ambulance> {
@@ -259,111 +250,6 @@ export class AmbulancesService {
       .getMany();
   }
 
-  async bulkUpdateLocations(
-    updates: Array<{
-      ambulanceId: string;
-      latitude: number;
-      longitude: number;
-    }>,
-  ): Promise<void> {
-    if (updates.length === 0) return;
-
-    const params: (string | number)[] = [];
-    const valueList = updates
-      .map((u) => {
-        const base = params.length;
-        params.push(u.ambulanceId, u.latitude, u.longitude);
-        return `($${base + 1}::uuid, $${base + 2}::float, $${base + 3}::float)`;
-      })
-      .join(', ');
-
-    await this.ambulanceRepository.query(
-      `UPDATE ambulances SET latitude = v.lat, longitude = v.lng
-       FROM (VALUES ${valueList}) AS v(id, lat, lng)
-       WHERE ambulances.id = v.id`,
-      params,
-    );
-  }
-
-  async findNearestAvailableAmbulanceExcluding(
-    location: Location,
-    excludeAmbulanceIds: string[] = [],
-  ): Promise<AmbulanceWithDistance | null> {
-    const availableAmbulances = await this.findAvailableList();
-
-    const filtered = availableAmbulances.filter(
-      (amb) =>
-        amb.latitude != null &&
-        amb.longitude != null &&
-        !excludeAmbulanceIds.includes(amb.id),
-    );
-
-    if (filtered.length === 0) {
-      return null;
-    }
-
-    const ambulanceLocations = filtered.map((amb) => ({
-      latitude: amb.latitude,
-      longitude: amb.longitude,
-    }));
-
-    const distances =
-      await this.googleMapsService.getDistancesToMultipleDestinations(
-        location,
-        ambulanceLocations,
-      );
-
-    let minIndex = 0;
-    let minDuration = distances[0].duration;
-
-    for (let i = 1; i < distances.length; i++) {
-      if (distances[i].duration < minDuration) {
-        minDuration = distances[i].duration;
-        minIndex = i;
-      }
-    }
-
-    return {
-      ...filtered[minIndex],
-      distance: distances[minIndex].distance,
-      duration: distances[minIndex].duration,
-    };
-  }
-
-  async findNearestFromList(
-    ambulances: Ambulance[],
-    location: Location,
-  ): Promise<AmbulanceWithDistance | null> {
-    if (ambulances.length === 0) return null;
-
-    const ambulanceLocations = ambulances.map((amb) => ({
-      latitude: amb.latitude,
-      longitude: amb.longitude,
-    }));
-
-    const distances =
-      await this.googleMapsService.getDistancesToMultipleDestinations(
-        location,
-        ambulanceLocations,
-      );
-
-    let minIndex = 0;
-    let minDuration = distances[0].duration;
-
-    for (let i = 1; i < distances.length; i++) {
-      if (distances[i].duration < minDuration) {
-        minDuration = distances[i].duration;
-        minIndex = i;
-      }
-    }
-
-    return {
-      ...ambulances[minIndex],
-      distance: distances[minIndex].distance,
-      duration: distances[minIndex].duration,
-    };
-  }
-
   async markAsDispatched(id: string): Promise<Ambulance> {
     try {
       const ambulance = await this.findOne(id);
@@ -387,8 +273,19 @@ export class AmbulancesService {
   async markAsAvailable(id: string): Promise<Ambulance> {
     try {
       const ambulance = await this.findOne(id);
+      const wasUnavailable = !ambulance.available;
       ambulance.available = true;
-      return await this.ambulanceRepository.save(ambulance);
+      const saved = await this.ambulanceRepository.save(ambulance);
+
+      if (wasUnavailable) {
+        this.eventEmitter
+          .emitAsync('ambulance.available', { ambulanceId: saved.id })
+          .catch((err) =>
+            this.logger.error('Failed to emit ambulance.available event', err),
+          );
+      }
+
+      return saved;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -498,18 +395,6 @@ export class AmbulancesService {
     return await this.ambulanceRepository.findOne({
       where: { driverId },
     });
-  }
-
-  async findAvailableWithDriverEgn(egn: string): Promise<Ambulance[]> {
-    return this.ambulanceRepository
-      .createQueryBuilder('ambulance')
-      .innerJoin(User, 'driver', 'ambulance.driverId = driver.id')
-      .innerJoin('driver.stateArchive', 'stateArchive')
-      .where('ambulance.available = :available', { available: true })
-      .andWhere('ambulance.driverId IS NOT NULL')
-      .andWhere('stateArchive.egn = :egn', { egn })
-      .select('ambulance.id')
-      .getMany();
   }
 
   async getDriverIdToAmbulanceIdMap(): Promise<Map<string, string>> {

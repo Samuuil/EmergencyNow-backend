@@ -368,11 +368,12 @@ describe('HospitalsService', () => {
 
     it('should sync hospitals from Google Places successfully', async () => {
       googleMapsService.findHospitalsByTextSearch.mockResolvedValue(mockPlaces);
-      hospitalRepository.findOne.mockResolvedValue(null);
+      hospitalRepository.find.mockResolvedValue([]);
       hospitalRepository.create.mockImplementation((dto) => dto as Hospital);
-      hospitalRepository.save.mockImplementation((hospital) =>
-        Promise.resolve(hospital as Hospital),
-      );
+      hospitalRepository.save.mockResolvedValue([
+        mockHospital,
+        mockHospital,
+      ] as any);
 
       await service.syncHospitalsFromGooglePlaces(mockLocation, 20000);
 
@@ -380,37 +381,34 @@ describe('HospitalsService', () => {
         mockLocation,
         20000,
       );
-      expect(hospitalRepository.findOne).toHaveBeenCalledTimes(2);
-      expect(hospitalRepository.save).toHaveBeenCalledTimes(2);
+      expect(hospitalRepository.find).toHaveBeenCalledTimes(1);
+      expect(hospitalRepository.save).toHaveBeenCalledTimes(1);
     });
 
     it('should skip existing hospitals when syncing', async () => {
       const existingHospital = { ...mockHospital, placeId: 'ChIJ_new1' };
       googleMapsService.findHospitalsByTextSearch.mockResolvedValue(mockPlaces);
-      hospitalRepository.findOne
-        .mockResolvedValueOnce(existingHospital)
-        .mockResolvedValueOnce(null);
+      hospitalRepository.find.mockResolvedValue([existingHospital]);
       hospitalRepository.create.mockImplementation((dto) => dto as Hospital);
-      hospitalRepository.save.mockImplementation((hospital) =>
-        Promise.resolve(hospital as Hospital),
-      );
+      hospitalRepository.save.mockResolvedValue([mockHospital] as any);
 
       await service.syncHospitalsFromGooglePlaces(mockLocation);
 
       expect(hospitalRepository.save).toHaveBeenCalledTimes(1);
     });
 
-    it('should continue syncing even if individual hospital save fails', async () => {
+    it('should not call save when all hospitals already exist', async () => {
+      const existingHospital1 = { ...mockHospital, placeId: 'ChIJ_new1' };
+      const existingHospital2 = { ...mockHospital, placeId: 'ChIJ_new2' };
       googleMapsService.findHospitalsByTextSearch.mockResolvedValue(mockPlaces);
-      hospitalRepository.findOne.mockResolvedValue(null);
-      hospitalRepository.create.mockImplementation((dto) => dto as Hospital);
-      hospitalRepository.save
-        .mockRejectedValueOnce(new Error('Save error'))
-        .mockResolvedValueOnce(mockHospital);
+      hospitalRepository.find.mockResolvedValue([
+        existingHospital1,
+        existingHospital2,
+      ]);
 
       await service.syncHospitalsFromGooglePlaces(mockLocation);
 
-      expect(hospitalRepository.save).toHaveBeenCalledTimes(2);
+      expect(hospitalRepository.save).not.toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException when Google Places API fails', async () => {

@@ -9,6 +9,7 @@ import {
   ContactErrorCode,
   ContactErrorMessages,
 } from './errors/contact-errors.enum';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
@@ -20,13 +21,19 @@ import { UsersService } from '../users/user.service';
 @Injectable()
 export class ContactsService {
   private readonly logger = new Logger(ContactsService.name);
-  private readonly MAX_CONTACTS = 5;
+  private readonly MAX_CONTACTS: number;
 
   constructor(
     @InjectRepository(Contact)
     private readonly contactsRepository: Repository<Contact>,
     private readonly usersService: UsersService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.MAX_CONTACTS = parseInt(
+      this.configService.get<string>('MAX_CONTACTS_PER_USER', '5'),
+      10,
+    );
+  }
 
   async findAll(query: PaginateQuery) {
     try {
@@ -188,7 +195,7 @@ export class ContactsService {
 
       const contact = this.contactsRepository.create({
         ...dto,
-        user: { id: userId } as any,
+        user: { id: userId } as { id: string },
       });
 
       const savedContact = await this.contactsRepository.save(contact);

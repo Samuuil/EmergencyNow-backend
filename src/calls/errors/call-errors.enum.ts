@@ -17,6 +17,7 @@ export enum CallErrorCode {
   DRIVER_RESPONSE_FAILED = 'DRIVER_RESPONSE_FAILED',
   NO_AVAILABLE_DRIVERS = 'NO_AVAILABLE_DRIVERS',
   INVALID_USER = 'INVALID_USER',
+  USER_HAS_ACTIVE_CALL = 'USER_HAS_ACTIVE_CALL',
   DATABASE_ERROR = 'DATABASE_ERROR',
 }
 
@@ -40,5 +41,7 @@ export const CallErrorMessages: Record<CallErrorCode, string> = {
   [CallErrorCode.DRIVER_RESPONSE_FAILED]: 'Failed to process driver response',
   [CallErrorCode.NO_AVAILABLE_DRIVERS]: 'No available drivers found',
   [CallErrorCode.INVALID_USER]: 'Invalid user',
+  [CallErrorCode.USER_HAS_ACTIVE_CALL]:
+    'You already have an active emergency call. Wait for it to complete or be cancelled before creating a new one.',
   [CallErrorCode.DATABASE_ERROR]: 'Database operation failed',
 };

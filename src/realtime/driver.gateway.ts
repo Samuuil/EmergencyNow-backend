@@ -29,20 +29,23 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(DriverGateway.name);
 
-  private driverSockets = new Map<string, string>();
-  private socketDrivers = new Map<string, string>();
+  private readonly onlineDrivers = new Set<string>();
 
-  private callOffers = new Map<
-    string,
-    { ambulanceId: string; rejectedAmbulanceIds: Set<string> }
-  >();
+  private callOffers = new Map<string, { ambulanceId: string }>();
 
   private locationRequestId = 0;
+  private lastRefreshStartedAt = 0;
+  private static readonly MIN_REFRESH_INTERVAL_MS = 2000;
+  private static readonly REFRESH_DEBOUNCE_MS = 2000;
+  private static readonly REFRESH_HARD_TIMEOUT_MS = 10000;
   private pendingLocationRequests = new Map<
     number,
     {
       driverIdToAmbulanceId: Map<string, string>;
       respondedAmbulanceIds: Set<string>;
+      expectedCount: number;
+      debounceTimer?: NodeJS.Timeout;
+      hardTimeoutTimer?: NodeJS.Timeout;
     }
   >();
 
@@ -74,8 +77,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         role: payload.role,
       };
 
-      this.driverSockets.set(payload.sub, client.id);
-      this.socketDrivers.set(client.id, payload.sub);
+      void client.join(payload.sub);
+      this.onlineDrivers.add(payload.sub);
       this.logger.log(
         `Driver ${payload.sub} connected via WS (socket ${client.id})`,
       );
@@ -87,10 +90,9 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: DriverSocket) {
-    const driverId = this.socketDrivers.get(client.id);
+    const driverId = client.user?.id;
     if (driverId) {
-      this.driverSockets.delete(driverId);
-      this.socketDrivers.delete(client.id);
+      this.onlineDrivers.delete(driverId);
       this.logger.log(`Driver ${driverId} disconnected (socket ${client.id})`);
     }
   }
@@ -102,7 +104,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { callId: string; accept: boolean },
   ) {
-    const driverId = this.socketDrivers.get(client.id);
+    const driverId = client.user?.id;
     if (!driverId) return;
     await this.eventEmitter.emitAsync('driver.responded', {
       callId: data.callId,
@@ -118,7 +120,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { requestId: number; latitude: number; longitude: number },
   ) {
-    const driverId = this.socketDrivers.get(client.id);
+    const driverId = client.user?.id;
     if (!driverId) return;
 
     const pending = this.pendingLocationRequests.get(data.requestId);
@@ -135,6 +137,16 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.longitude,
       );
     }
+
+    if (pending.respondedAmbulanceIds.size >= pending.expectedCount) {
+      this.closeLocationRefreshWindow(data.requestId);
+      return;
+    }
+
+    if (pending.debounceTimer) clearTimeout(pending.debounceTimer);
+    pending.debounceTimer = setTimeout(() => {
+      this.closeLocationRefreshWindow(data.requestId);
+    }, DriverGateway.REFRESH_DEBOUNCE_MS);
   }
 
   @UseGuards(WsJwtGuard)
@@ -144,7 +156,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { callId: string; latitude: number; longitude: number },
   ) {
-    const driverId = this.socketDrivers.get(client.id);
+    const driverId = client.user?.id;
     this.logger.log(
       `[location.update] Received from socket ${client.id}, driverId=${driverId}, callId=${data?.callId}, lat=${data?.latitude}, lng=${data?.longitude}`,
     );
@@ -173,12 +185,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     duration: number;
   }) {
     const { driverId, callId, ambulanceId } = params;
-    const existing = this.callOffers.get(callId);
-    const rejected = existing?.rejectedAmbulanceIds ?? new Set<string>();
-    this.callOffers.set(callId, {
-      ambulanceId,
-      rejectedAmbulanceIds: rejected,
-    });
+    this.callOffers.set(callId, { ambulanceId });
 
     this.emitToDriver(driverId, 'call.offer', {
       callId: params.callId,
@@ -190,15 +197,6 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  addRejection(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? {
-      ambulanceId: '',
-      rejectedAmbulanceIds: new Set<string>(),
-    };
-    entry.rejectedAmbulanceIds.add(ambulanceId);
-    this.callOffers.set(callId, entry);
-  }
-
   clearOffer(callId: string) {
     this.callOffers.delete(callId);
   }
@@ -207,15 +205,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return this.callOffers.get(callId)?.ambulanceId ?? null;
   }
 
-  getRejectedAmbulanceIds(callId: string): string[] {
-    return Array.from(this.callOffers.get(callId)?.rejectedAmbulanceIds ?? []);
-  }
-
   setPendingAmbulance(callId: string, ambulanceId: string) {
-    const entry = this.callOffers.get(callId) ?? {
-      ambulanceId: '',
-      rejectedAmbulanceIds: new Set<string>(),
-    };
+    const entry = this.callOffers.get(callId) ?? { ambulanceId: '' };
     entry.ambulanceId = ambulanceId;
     this.callOffers.set(callId, entry);
   }
@@ -236,18 +227,11 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private emitToDriver(driverId: string, event: string, data: any) {
-    const socketId = this.driverSockets.get(driverId);
-    if (!socketId) {
-      this.logger.warn(
-        `Driver ${driverId} not connected; cannot emit ${event}`,
-      );
-      return;
-    }
-    this.server.to(socketId).emit(event, data);
+    this.server.to(driverId).emit(event, data);
   }
 
   isDriverOnline(driverId: string): boolean {
-    return this.driverSockets.has(driverId);
+    return this.onlineDrivers.has(driverId);
   }
 
   private extractToken(client: DriverSocket): string | null {
@@ -255,32 +239,63 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async refreshAvailableAmbulanceLocations(): Promise<void> {
+    const now = Date.now();
+    if (
+      now - this.lastRefreshStartedAt <
+      DriverGateway.MIN_REFRESH_INTERVAL_MS
+    ) {
+      this.logger.log(
+        'Location refresh throttled; sharing an existing in-flight window',
+      );
+      return;
+    }
+    this.lastRefreshStartedAt = now;
+
     const driverIdToAmbulanceId =
       await this.ambulancesService.getDriverIdToAmbulanceIdMap();
 
     const onlineDriverIds = Array.from(driverIdToAmbulanceId.keys()).filter(
-      (dId: string) => this.driverSockets.has(dId),
+      (dId: string) => this.onlineDrivers.has(dId),
     );
+
+    const requestId = ++this.locationRequestId;
 
     if (onlineDriverIds.length === 0) {
       this.logger.log(
         'No online drivers with available ambulances to request location from',
       );
+      this.eventEmitter.emit('ambulance.locations.refreshed', { requestId });
       return;
     }
 
-    const requestId = ++this.locationRequestId;
-    this.pendingLocationRequests.set(requestId, {
+    const entry: {
+      driverIdToAmbulanceId: Map<string, string>;
+      respondedAmbulanceIds: Set<string>;
+      expectedCount: number;
+      debounceTimer?: NodeJS.Timeout;
+      hardTimeoutTimer?: NodeJS.Timeout;
+    } = {
       driverIdToAmbulanceId,
       respondedAmbulanceIds: new Set(),
-    });
+      expectedCount: onlineDriverIds.length,
+    };
+    this.pendingLocationRequests.set(requestId, entry);
 
     for (const driverId of onlineDriverIds) {
       this.emitToDriver(driverId, 'location.request', { requestId });
     }
 
-    setTimeout(() => {
-      this.pendingLocationRequests.delete(requestId);
-    }, 10000);
+    entry.hardTimeoutTimer = setTimeout(() => {
+      this.closeLocationRefreshWindow(requestId);
+    }, DriverGateway.REFRESH_HARD_TIMEOUT_MS);
+  }
+
+  private closeLocationRefreshWindow(requestId: number): void {
+    const entry = this.pendingLocationRequests.get(requestId);
+    if (!entry) return;
+    if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
+    if (entry.hardTimeoutTimer) clearTimeout(entry.hardTimeoutTimer);
+    this.pendingLocationRequests.delete(requestId);
+    this.eventEmitter.emit('ambulance.locations.refreshed', { requestId });
   }
 }

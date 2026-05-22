@@ -20,4 +20,13 @@ export class CreateCallDto {
   })
   @IsNumber()
   longitude: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Phone number of the patient if calling on behalf of someone else',
+    example: '+359888123456',
+  })
+  @IsOptional()
+  @IsString()
+  patientPhoneNumber?: string;
 }

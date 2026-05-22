@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CallsService } from './call.service';
+import { CallCleanupService } from './call-cleanup.service';
 import { CallsController } from './call.controller';
 import { Call } from './entities/call.entity';
 import { AmbulancesModule } from '../ambulances/ambulance.module';
@@ -10,6 +11,8 @@ import { GoogleMapsService } from '../common/services/google-maps.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { AuthModule } from '../auth/auth.module';
 import { ContactsModule } from '../contacts/contact.module';
+import { DispatchersModule } from '../dispatchers/dispatcher.module';
+import { StateArchiveModule } from '../state-archive/state-archive.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
@@ -22,9 +25,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
     RealtimeModule,
     AuthModule,
     ContactsModule,
+    StateArchiveModule,
+    forwardRef(() => DispatchersModule),
   ],
   controllers: [CallsController],
-  providers: [CallsService, GoogleMapsService, JwtAuthGuard, RolesGuard],
+  providers: [
+    CallsService,
+    CallCleanupService,
+    GoogleMapsService,
+    JwtAuthGuard,
+    RolesGuard,
+  ],
   exports: [CallsService],
 })
 export class CallsModule {}

@@ -5,6 +5,8 @@ import {
   OneToOne,
   JoinColumn,
   OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Profile } from '../../profiles/entities/profile.entity';
@@ -39,4 +41,10 @@ export class User {
   @OneToOne(() => StateArchive, (archive) => archive.user, { cascade: true })
   @JoinColumn()
   stateArchive: StateArchive;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

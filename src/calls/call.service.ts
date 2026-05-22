@@ -3,10 +3,12 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate, PaginateQuery, FilterOperator } from 'nestjs-paginate';
 import { Call } from './entities/call.entity';
 import { CreateCallDto } from './dto/createCall.dto';
@@ -25,6 +27,16 @@ import { UserGateway } from '../realtime/user.gateway';
 import { MailService } from '../auth/services/mail.service';
 import { SmsService } from '../auth/services/sms.service';
 import { ContactsService } from '../contacts/contact.service';
+import { DispatcherService } from '../dispatchers/dispatcher.service';
+import { StateArchiveService } from '../state-archive/state-archive.service';
+import { CallErrorCode, CallErrorMessages } from './errors/call-errors.enum';
+
+const ACTIVE_CALL_STATUSES = [
+  CallStatus.PENDING,
+  CallStatus.DISPATCHED,
+  CallStatus.EN_ROUTE,
+  CallStatus.ARRIVED,
+];
 
 interface DriverRespondedEvent {
   callId: string;
@@ -42,6 +54,7 @@ interface DriverLocationUpdatedEvent {
 @Injectable()
 export class CallsService {
   private readonly logger = new Logger(CallsService.name);
+
   constructor(
     @InjectRepository(Call)
     private readonly callsRepository: Repository<Call>,
@@ -54,6 +67,9 @@ export class CallsService {
     private readonly mailService: MailService,
     private readonly smsService: SmsService,
     private readonly contactsService: ContactsService,
+    @Inject(forwardRef(() => DispatcherService))
+    private readonly dispatcherService: DispatcherService,
+    private readonly stateArchiveService: StateArchiveService,
   ) {}
 
   async create(dto: CreateCallDto, user: User): Promise<Call> {
@@ -61,21 +77,55 @@ export class CallsService {
 
     if (!fullUser) throw new BadRequestException('User not found');
 
+    const activeCall = await this.callsRepository.findOne({
+      where: {
+        user: { id: user.id },
+        status: In(ACTIVE_CALL_STATUSES),
+      },
+    });
+    if (activeCall) {
+      throw new BadRequestException({
+        code: CallErrorCode.USER_HAS_ACTIVE_CALL,
+        message: CallErrorMessages[CallErrorCode.USER_HAS_ACTIVE_CALL],
+        activeCallId: activeCall.id,
+      });
+    }
+    let patientEgn: string | null = fullUser.stateArchive?.egn ?? null;
+    let patientPhoneNumber: string | null = null;
+
+    if (dto.patientPhoneNumber) {
+      patientPhoneNumber = dto.patientPhoneNumber;
+      try {
+        const patientArchive = await this.stateArchiveService.findByPhoneNumber(
+          dto.patientPhoneNumber,
+        );
+        patientEgn = patientArchive?.egn ?? null;
+      } catch (error) {
+        this.logger.error(
+          `Failed to resolve patient EGN for phone ${dto.patientPhoneNumber}; proceeding without EGN`,
+          error,
+        );
+        patientEgn = null;
+      }
+    }
+
     const call = this.callsRepository.create({
       description: dto.description,
       latitude: dto.latitude,
       longitude: dto.longitude,
       user: fullUser,
       userEgn: fullUser.stateArchive?.egn ?? null,
+      patientEgn,
+      patientPhoneNumber,
       status: CallStatus.PENDING,
     });
 
     const savedCall = await this.callsRepository.save(call);
 
     try {
-      await this.proposeToNearestDriver(savedCall.id);
+      await this.dispatcherService.routeCall(savedCall);
     } catch (error) {
-      this.logger.error('Failed to propose call to driver:', error);
+      this.logger.error('Failed to route call to a dispatcher:', error);
     }
 
     this.notifyEmergencyContactsAboutCall(fullUser, savedCall).catch((err) =>
@@ -88,14 +138,20 @@ export class CallsService {
   @OnEvent('driver.responded')
   async onDriverResponded(event: DriverRespondedEvent): Promise<void> {
     try {
-      await this.handleDriverResponse(event.callId, event.driverId, event.accept);
+      await this.handleDriverResponse(
+        event.callId,
+        event.driverId,
+        event.accept,
+      );
     } catch (e) {
       this.logger.error(`Failed to handle driver.responded event`, e);
     }
   }
 
   @OnEvent('driver.location.updated')
-  async onDriverLocationUpdated(event: DriverLocationUpdatedEvent): Promise<void> {
+  async onDriverLocationUpdated(
+    event: DriverLocationUpdatedEvent,
+  ): Promise<void> {
     try {
       const call = await this.updateAmbulanceLocation(
         event.callId,
@@ -105,7 +161,11 @@ export class CallsService {
       this.logger.log(
         `[driver.location.updated] Updated call ${call.id}, userId=${call.user?.id}`,
       );
-      if (call.routePolyline && call.estimatedDistance && call.estimatedDuration) {
+      if (
+        call.routePolyline &&
+        call.estimatedDistance &&
+        call.estimatedDuration
+      ) {
         this.driverGateway.sendRouteToDriver(event.driverId, {
           callId: call.id,
           route: {
@@ -119,80 +179,6 @@ export class CallsService {
     } catch (e) {
       this.logger.error(`Failed to handle driver.location.updated event`, e);
     }
-  }
-
-  async dispatchNearestAmbulance(callId: string): Promise<Call> {
-    const call = await this.findOne(callId);
-    if (
-      call.status === CallStatus.COMPLETED ||
-      call.status === CallStatus.CANCELLED
-    ) {
-      throw new BadRequestException('Call is already completed or cancelled');
-    }
-    await this.proposeToNearestDriver(callId);
-    return call;
-  }
-
-  private async proposeToNearestDriver(
-    callId: string,
-    skipLocationRefresh = false,
-  ): Promise<void> {
-    const call = await this.callsRepository.findOne({
-      where: { id: callId },
-      relations: ['user', 'user.stateArchive', 'ambulance'],
-    });
-
-    if (!call) return;
-
-    if (!skipLocationRefresh) {
-      this.driverGateway.refreshAvailableAmbulanceLocations().catch((error) =>
-        this.logger.error('Failed to broadcast location requests:', error),
-      );
-    }
-
-    const excludedIds = new Set(
-      this.driverGateway.getRejectedAmbulanceIds(callId),
-    );
-
-    if (call.user?.stateArchive?.egn) {
-      const ambulancesWithMatchingDriverEgn =
-        await this.ambulancesService.findAvailableWithDriverEgn(
-          call.user.stateArchive.egn,
-        );
-      ambulancesWithMatchingDriverEgn.forEach((amb) => excludedIds.add(amb.id));
-    }
-
-    const allAvailable = await this.ambulancesService.findAvailableList();
-    const candidates = allAvailable.filter(
-      (amb) =>
-        amb.latitude != null &&
-        amb.longitude != null &&
-        !excludedIds.has(amb.id) &&
-        amb.driverId != null &&
-        this.driverGateway.isDriverOnline(amb.driverId),
-    );
-
-    const candidate = await this.ambulancesService.findNearestFromList(
-      candidates,
-      { latitude: call.latitude, longitude: call.longitude },
-    );
-
-    if (!candidate) {
-      return;
-    }
-
-    this.driverGateway.setPendingAmbulance(callId, candidate.id);
-
-    this.driverGateway.offerCall({
-      callId: call.id,
-      description: call.description,
-      latitude: call.latitude,
-      longitude: call.longitude,
-      ambulanceId: candidate.id,
-      driverId: candidate.driverId!,
-      distance: candidate.distance,
-      duration: candidate.duration,
-    });
   }
 
   async handleDriverResponse(
@@ -211,8 +197,8 @@ export class CallsService {
     }
 
     if (!accept) {
-      this.driverGateway.addRejection(callId, ambulance.id);
-      await this.proposeToNearestDriver(callId, true);
+      this.driverGateway.clearOffer(callId);
+      await this.dispatcherService.onDriverRejected(callId, ambulance.id);
       return;
     }
 
@@ -230,12 +216,16 @@ export class CallsService {
     call.ambulanceCurrentLatitude = ambulance.latitude!;
     call.ambulanceCurrentLongitude = ambulance.longitude!;
     call.dispatchedAt = new Date();
+    call.assignedDispatcherId = null;
+    call.dispatcherAssignedAt = null;
 
     await this.ambulancesService.markAsDispatched(ambulance.id);
     await this.ambulancesService.updateLastCallAcceptedAt(ambulance.id);
     await this.callsRepository.save(call);
 
     this.driverGateway.clearOffer(callId);
+    await this.dispatcherService.onDriverAccepted(callId, ambulance.id);
+
     this.driverGateway.sendRouteToDriver(driverId, {
       callId: call.id,
       route: {
@@ -317,6 +307,7 @@ export class CallsService {
 
   async updateStatus(callId: string, status: CallStatus): Promise<Call> {
     const call = await this.findOne(callId);
+    const previousStatus = call.status;
 
     call.status = status;
 
@@ -332,6 +323,18 @@ export class CallsService {
     }
 
     const savedCall = await this.callsRepository.save(call);
+
+    if (status === CallStatus.COMPLETED && savedCall.ambulance) {
+      await this.ambulancesService.markAsAvailable(savedCall.ambulance.id);
+    }
+
+    if (
+      (status === CallStatus.CANCELLED || status === CallStatus.COMPLETED) &&
+      previousStatus === CallStatus.PENDING
+    ) {
+      // Call was cancelled/completed while still in dispatcher hands.
+      await this.dispatcherService.notifyCallCancelled(callId);
+    }
 
     if (call.user?.id) {
       this.userGateway.notifyStatusChange(call.user.id, {
@@ -447,6 +450,9 @@ export class CallsService {
       await this.ambulancesService.markAsAvailable(call.ambulance.id);
     }
 
+    await this.dispatcherService.notifyCallCancelled(id);
+    this.driverGateway.clearOffer(id);
+
     await this.callsRepository.remove(call);
   }
 
@@ -507,7 +513,10 @@ export class CallsService {
       hospital.name,
       route.duration,
     ).catch((err) =>
-      this.logger.error('Failed to notify emergency contacts about hospital:', err),
+      this.logger.error(
+        'Failed to notify emergency contacts about hospital:',
+        err,
+      ),
     );
 
     return savedCall;
@@ -556,9 +565,7 @@ export class CallsService {
     }
 
     const userName =
-      user.stateArchive?.fullName ||
-      user.stateArchive?.email ||
-      'A user';
+      user.stateArchive?.fullName || user.stateArchive?.email || 'A user';
 
     const emailPromises = contacts
       .filter((contact) => contact.email)

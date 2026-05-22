@@ -25,5 +25,6 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "types": ["node", "jest"],
-  }
+  },
+  "exclude": ["node_modules", "dist", "Example notification"]
 }
