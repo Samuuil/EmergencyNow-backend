@@ -9,7 +9,7 @@ export class AppController {
   @Redirect('/api/docs', 302)
   redirectToDocs() {}
 
-  @Get('health')
+  @Get('health/v2')
   @ApiOperation({ summary: 'Health check endpoint' })
   getHealth(): string {
     return 'App is healthy';
