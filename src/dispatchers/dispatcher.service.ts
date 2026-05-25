@@ -30,10 +30,11 @@ export class DispatcherService implements OnModuleDestroy {
 
   private readonly maxCallsPerDispatcher: number;
   private readonly dispatcherTimeoutMs: number;
+  private readonly driverOfferTimeoutMs: number;
 
-  // callId -> reassignment timer. Stays in-process: a setTimeout handle
-  // cannot live in Redis. Dispatcher load and seen-tracking are in Redis.
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
+
+  private readonly driverOfferTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     @InjectRepository(Call)
@@ -57,14 +58,18 @@ export class DispatcherService implements OnModuleDestroy {
       this.configService.get<string>('DISPATCHER_TIMEOUT_MS', '300000'),
       10,
     );
+    this.driverOfferTimeoutMs = parseInt(
+      this.configService.get<string>('DRIVER_OFFER_TIMEOUT_MS', '180000'),
+      10,
+    );
   }
 
   onModuleDestroy(): void {
     for (const timer of this.callTimers.values()) clearTimeout(timer);
     this.callTimers.clear();
+    for (const timer of this.driverOfferTimers.values()) clearTimeout(timer);
+    this.driverOfferTimers.clear();
   }
-
-  // ───────────────────────── Public API ─────────────────────────
 
   async routeCall(call: Call): Promise<void> {
     const callerUserId = call.user?.id ?? null;
@@ -81,6 +86,7 @@ export class DispatcherService implements OnModuleDestroy {
 
   async releaseCall(callId: string, reason: string): Promise<void> {
     this.cancelTimer(callId);
+    this.cancelDriverOfferTimer(callId);
     const dispatcherId = await this.findHoldingDispatcher(callId);
     if (dispatcherId) {
       await this.removeCallFromDispatcher(dispatcherId, callId);
@@ -106,12 +112,14 @@ export class DispatcherService implements OnModuleDestroy {
       void this.drainQueueForDispatcher(dispatcherId);
     }
     this.cancelTimer(callId);
+    this.cancelDriverOfferTimer(callId);
     await this.redisService.clearSeenDispatchers(callId);
     await this.cancelOfferedDriverFcm(callId);
   }
 
   async onDriverAccepted(callId: string, ambulanceId: string): Promise<void> {
     this.cancelTimer(callId);
+    this.cancelDriverOfferTimer(callId);
     const dispatcherId = await this.findHoldingDispatcher(callId);
     if (dispatcherId) {
       await this.removeCallFromDispatcher(dispatcherId, callId);
@@ -125,6 +133,7 @@ export class DispatcherService implements OnModuleDestroy {
   }
 
   async onDriverRejected(callId: string, ambulanceId: string): Promise<void> {
+    this.cancelDriverOfferTimer(callId);
     const dispatcherId = await this.findHoldingDispatcher(callId);
     if (!dispatcherId) return;
     const ambulances = await this.buildAmbulanceList();
@@ -202,6 +211,8 @@ export class DispatcherService implements OnModuleDestroy {
       duration: route.duration,
     });
 
+    this.scheduleDriverOfferTimer(callId, ambulance.id, dispatcherId);
+
     this.logger.log(
       `Dispatcher ${dispatcherId} offered call ${callId} to ambulance ${ambulanceId} (driver ${ambulance.driverId}, socket=${driverOnline ? 'online' : 'offline, FCM-only'})`,
     );
@@ -224,8 +235,6 @@ export class DispatcherService implements OnModuleDestroy {
     return this.buildAmbulanceList();
   }
 
-  // ───────────────────────── Event listeners ─────────────────────────
-
   @OnEvent('dispatcher.connected')
   async onDispatcherConnected(event: { dispatcherId: string }): Promise<void> {
     await this.reattachExistingCallsOnConnect(event.dispatcherId);
@@ -246,8 +255,6 @@ export class DispatcherService implements OnModuleDestroy {
         { id: callId, assignedDispatcherId: event.dispatcherId },
         { assignedDispatcherId: null, dispatcherAssignedAt: null },
       );
-      // Try to immediately reassign each released call; if none available it
-      // will be queued and the user notified.
       const call = await this.callsRepository.findOne({
         where: { id: callId },
       });
@@ -286,12 +293,7 @@ export class DispatcherService implements OnModuleDestroy {
         { ambulances },
       );
     }
-    // A freed ambulance doesn't help drain the dispatcher queue (queue depends
-    // on dispatcher capacity, not ambulance availability) — but it does help
-    // dispatchers who are already holding calls actually assign them.
   }
-
-  // ───────────────────────── Internals ─────────────────────────
 
   private async pickDispatcher(
     callId: string,
@@ -302,7 +304,6 @@ export class DispatcherService implements OnModuleDestroy {
       .filter((id) => id !== callerUserId);
     if (online.length === 0) return null;
 
-    // Fetch seen-set and every load count once, then decide synchronously.
     const seen = new Set(await this.redisService.getSeenDispatchers(callId));
     const loadCounts = await Promise.all(
       online.map((id) => this.redisService.getDispatcherLoad(id)),
@@ -320,7 +321,6 @@ export class DispatcherService implements OnModuleDestroy {
     const unseen = eligibleWithCapacity.filter((id) => !seen.has(id));
     const pool = unseen.length > 0 ? unseen : eligibleWithCapacity;
 
-    // Least-loaded; ties broken randomly.
     pool.sort((a, b) => loadOf(a) - loadOf(b));
     const minLoad = loadOf(pool[0]);
     const tied = pool.filter((id) => loadOf(id) === minLoad);
@@ -331,7 +331,6 @@ export class DispatcherService implements OnModuleDestroy {
     callId: string,
     dispatcherId: string,
   ): Promise<boolean> {
-    // Atomic claim: only succeed if the call is still pending & unassigned.
     const result = await this.callsRepository
       .createQueryBuilder()
       .update(Call)
@@ -402,10 +401,8 @@ export class DispatcherService implements OnModuleDestroy {
   }
 
   private async handleTimeout(callId: string): Promise<void> {
-    // If a driver offer is already in flight for this call, don't reassign.
     const pendingAmbulance = this.driverGateway.getPendingAmbulanceId(callId);
     if (pendingAmbulance) {
-      // Driver hasn't responded yet; just restart the timer.
       this.scheduleTimer(callId);
       return;
     }
@@ -415,36 +412,29 @@ export class DispatcherService implements OnModuleDestroy {
       relations: ['user'],
     });
     if (!call || call.status !== CallStatus.PENDING) {
-      // Call is no longer relevant.
       await this.redisService.clearSeenDispatchers(callId);
       return;
     }
 
     const currentDispatcherId = await this.findHoldingDispatcher(callId);
     if (!currentDispatcherId) {
-      // No one holds it — treat as a fresh route.
       await this.routeCall(call);
       return;
     }
 
-    // Mark current dispatcher as seen for this call.
     await this.redisService.addSeenDispatcher(callId, currentDispatcherId);
 
-    // Try to find a different eligible dispatcher (not in seen).
     const next = await this.pickDispatcher(callId, call.user?.id ?? null);
 
     if (!next || next === currentDispatcherId) {
-      // No alternative — fall back to keeping current dispatcher.
       this.logger.log(
         `Call ${callId} timeout: no alternative dispatcher, keeping with ${currentDispatcherId}`,
       );
-      // Reset the seen-set so the current dispatcher can be picked again later.
       await this.redisService.removeSeenDispatcher(callId, currentDispatcherId);
       this.scheduleTimer(callId);
       return;
     }
 
-    // Release current, assign to next.
     await this.removeCallFromDispatcher(currentDispatcherId, callId);
     this.dispatcherGateway.notifyCallReleased(currentDispatcherId, {
       callId,
@@ -459,11 +449,9 @@ export class DispatcherService implements OnModuleDestroy {
 
     const assigned = await this.assignCallToDispatcher(callId, next);
     if (!assigned) {
-      // Race: requeue.
       await this.notifyUserAwaitingDispatcher(callId);
     }
 
-    // Drain queue for the freed dispatcher.
     void this.drainQueueForDispatcher(currentDispatcherId);
   }
 
@@ -482,7 +470,6 @@ export class DispatcherService implements OnModuleDestroy {
       if (!next) return;
       const claimed = await this.assignCallToDispatcher(next.id, dispatcherId);
       if (!claimed) {
-        // Someone else got it; try the next one.
         continue;
       }
     }
@@ -491,8 +478,6 @@ export class DispatcherService implements OnModuleDestroy {
   private async reattachExistingCallsOnConnect(
     dispatcherId: string,
   ): Promise<void> {
-    // Calls previously assigned to this dispatcher (across restarts) should be
-    // re-attached so the timer / load tracking is consistent.
     const calls = await this.callsRepository.find({
       where: {
         assignedDispatcherId: dispatcherId,
@@ -637,6 +622,81 @@ export class DispatcherService implements OnModuleDestroy {
     callId: string,
   ): Promise<void> {
     await this.redisService.removeDispatcherCall(dispatcherId, callId);
+  }
+
+  private scheduleDriverOfferTimer(
+    callId: string,
+    ambulanceId: string,
+    dispatcherId: string,
+  ): void {
+    this.cancelDriverOfferTimer(callId);
+    const timer = setTimeout(() => {
+      this.driverOfferTimers.delete(callId);
+      this.handleDriverOfferTimeout(callId, ambulanceId, dispatcherId).catch(
+        (e) =>
+          this.logger.error(
+            `Driver offer timeout handler failed for call ${callId}`,
+            e,
+          ),
+      );
+    }, this.driverOfferTimeoutMs);
+    this.driverOfferTimers.set(callId, timer);
+  }
+
+  private cancelDriverOfferTimer(callId: string): void {
+    const t = this.driverOfferTimers.get(callId);
+    if (t) {
+      clearTimeout(t);
+      this.driverOfferTimers.delete(callId);
+    }
+  }
+
+  private async handleDriverOfferTimeout(
+    callId: string,
+    ambulanceId: string,
+    dispatcherId: string,
+  ): Promise<void> {
+    if (!this.driverGateway.getPendingAmbulanceId(callId)) return;
+
+    this.logger.log(
+      `Driver offer timed out for call ${callId} (ambulance ${ambulanceId}, dispatcher ${dispatcherId})`,
+    );
+
+    await this.cancelOfferedDriverFcm(callId);
+    this.driverGateway.clearOffer(callId);
+
+    const ambulances = await this.buildAmbulanceList();
+
+    const dispatcherStillHoldsCall = await this.dispatcherHoldsCall(
+      dispatcherId,
+      callId,
+    );
+
+    if (
+      this.dispatcherGateway.isDispatcherOnline(dispatcherId) &&
+      dispatcherStillHoldsCall
+    ) {
+      this.dispatcherGateway.notifyDriverNoResponse(dispatcherId, {
+        callId,
+        ambulanceId,
+        ambulances,
+      });
+    } else {
+      const holdingDispatcher = await this.findHoldingDispatcher(callId);
+      if (holdingDispatcher) {
+        await this.removeCallFromDispatcher(holdingDispatcher, callId);
+        await this.callsRepository.update(
+          { id: callId },
+          { assignedDispatcherId: null, dispatcherAssignedAt: null },
+        );
+      }
+      const call = await this.callsRepository.findOne({
+        where: { id: callId },
+      });
+      if (call && call.status === CallStatus.PENDING) {
+        await this.routeCall(call);
+      }
+    }
   }
 
   private async cancelOfferedDriverFcm(callId: string): Promise<void> {
