@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import { createTransport, type Transporter } from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class MailService {
-  private transporter: nodemailer.Transporter<nodemailer.SentMessageInfo>;
+  private transporter: Transporter<SMTPTransport.SentMessageInfo>;
   private readonly logger = new Logger(MailService.name);
 
   constructor(private configService: ConfigService) {
@@ -20,8 +21,7 @@ export class MailService {
       `Initializing mail service with host=${host}, port=${port}, secure=${secure}`,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    this.transporter = nodemailer.createTransport({
+    this.transporter = createTransport({
       host: host,
       port: port,
       secure: secure,
@@ -88,10 +88,8 @@ export class MailService {
         `,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
       this.logger.log(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         `Emergency alert sent successfully to ${contactEmail}: ${info.messageId}`,
       );
     } catch (error) {
@@ -147,7 +145,6 @@ export class MailService {
         `,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
       this.logger.log(
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -188,9 +185,7 @@ export class MailService {
         `,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const info = await this.transporter.sendMail(mailOptions);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.log(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
       const err = error as Error;

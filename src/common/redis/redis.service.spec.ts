@@ -64,7 +64,6 @@ describe('RedisService', () => {
         (call) => call[0] === 'connect',
       )?.[1];
 
-      // Trigger the connect event
       if (connectHandler) {
         connectHandler();
       }
@@ -75,7 +74,6 @@ describe('RedisService', () => {
         (call) => call[0] === 'error',
       )?.[1];
 
-      // Trigger the error event
       if (errorHandler) {
         errorHandler(new Error('Connection failed'));
       }
