@@ -56,7 +56,6 @@ describe('VerificationCodeService', () => {
       const code2 = service.generateCode();
       const code3 = service.generateCode();
 
-      // There's a tiny chance this could fail, but statistically very unlikely
       const codes = new Set([code1, code2, code3]);
       expect(codes.size).toBeGreaterThan(1);
     });
