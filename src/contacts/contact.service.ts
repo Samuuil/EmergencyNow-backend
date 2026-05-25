@@ -200,7 +200,6 @@ export class ContactsService {
 
       const savedContact = await this.contactsRepository.save(contact);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { user: _user, ...contactWithoutUser } = savedContact;
       return contactWithoutUser as Contact;
     } catch (error) {
@@ -249,7 +248,6 @@ export class ContactsService {
       Object.assign(contact, dto);
       const updatedContact = await this.contactsRepository.save(contact);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { user: _user, ...contactWithoutUser } = updatedContact;
       return contactWithoutUser as Contact;
     } catch (error) {
@@ -331,7 +329,6 @@ export class ContactsService {
         });
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { user: _user, ...contactWithoutUser } = contact;
       return contactWithoutUser as Contact;
     } catch (error) {
