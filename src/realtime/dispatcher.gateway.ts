@@ -176,6 +176,17 @@ export class DispatcherGateway
     this.emitToDispatcher(dispatcherId, 'ambulance.unavailable', payload);
   }
 
+  notifyDriverNoResponse(
+    dispatcherId: string,
+    payload: {
+      callId: string;
+      ambulanceId: string;
+      ambulances: DispatcherAmbulanceSummaryDto[];
+    },
+  ): void {
+    this.emitToDispatcher(dispatcherId, 'driver.no-response', payload);
+  }
+
   broadcastAmbulanceListUpdated(
     dispatcherIds: string[],
     payload: { ambulances: DispatcherAmbulanceSummaryDto[] },
