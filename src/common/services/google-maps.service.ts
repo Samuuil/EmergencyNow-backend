@@ -209,7 +209,6 @@ export class GoogleMapsService {
       }
 
       return data.map((element) => {
-        // Check condition instead of status (Routes API v2 uses condition)
         if (element.condition !== 'ROUTE_EXISTS' || !element.distanceMeters) {
           return { distance: Infinity, duration: Infinity };
         }
@@ -239,10 +238,6 @@ export class GoogleMapsService {
   > {
     try {
       const url = 'https://places.googleapis.com/v1/places:searchText';
-
-      // Remove unused variables
-      // const latOffset = radius / 111000;
-      // const lngOffset = radius / (111000 * Math.cos((location.latitude * Math.PI) / 180));
 
       const requestBody = {
         textQuery: 'hospital',
